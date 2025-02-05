@@ -1,5 +1,5 @@
-# Use the official InterSystems IRIS for Health Community Edition image for ARM64 architecture, change to AMD64 for Windows and older macs
-FROM containers.intersystems.com/intersystems/irishealth-community-arm64:latest-em
+# Use the official InterSystems IRIS for Health Community Edition image
+FROM intersystems/irishealth-community:latest-cd
 
 # Switch to the root user to perform administrative tasks
 USER root
