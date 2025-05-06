@@ -1,13 +1,12 @@
 
 
 services:
-  iris-fhir-validator:
+  iris-fhir:
     build: .
     container_name: iris-fhir-validator
     restart: unless-stopped
     ports:
       - "8080:52773"  # Map local port 8080 to IRIS web port 52773
-      - "1972:1972"  # Map local port 1972 to iris for health superserver port 1972
     volumes:
       - ./data:/data  # Map local 'data' directory to '/data' inside container
     environment:
