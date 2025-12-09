@@ -12,6 +12,16 @@ import os
 import sys
 import plotly.graph_objects as go
 
+# Load .env file if present
+try:
+    from dotenv import load_dotenv
+    # Look for .env in parent directory (project root)
+    env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
+except ImportError:
+    pass  # python-dotenv not installed
+
 # OpenAI support
 try:
     from openai import OpenAI
