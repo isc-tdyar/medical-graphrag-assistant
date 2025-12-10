@@ -25,6 +25,9 @@ streamlit
 # Visualization
 plotly
 
+# Graph layout algorithms
+networkx
+
 # Testing (for P1 implementation)
 pytest
 pytest-cov
