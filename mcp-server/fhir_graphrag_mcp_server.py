@@ -40,6 +40,14 @@ from mcp.server.stdio import stdio_server
 # Import async tools
 import asyncio
 
+# Import NetworkX for force-directed graph layouts
+try:
+    import networkx as nx
+    NETWORKX_AVAILABLE = True
+except ImportError:
+    NETWORKX_AVAILABLE = False
+    print("Warning: networkx not available, graph layouts will use random positions", file=sys.stderr)
+
 # Import boto3 for AWS Bedrock
 try:
     import boto3
@@ -974,17 +982,19 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
 
             nodes = []
             node_ids = set()
-            for eid, text, etype in cursor.fetchall():
+            id_to_idx = {}
+            for idx, (eid, text, etype) in enumerate(cursor.fetchall()):
                 nodes.append({
                     "id": eid,
                     "name": text,
                     "type": etype,
-                    # Random layout for now, client can use force-directed
                     "x": 0, "y": 0
                 })
                 node_ids.add(eid)
+                id_to_idx[eid] = idx
 
             # Get relationships between these nodes
+            edges = []
             if node_ids:
                 placeholders = ','.join(['?'] * len(node_ids))
                 cursor.execute(f"""
@@ -994,22 +1004,45 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     AND TargetEntityID IN ({placeholders})
                 """, list(node_ids) + list(node_ids))
 
-                edges = []
                 for source, target, rel_type in cursor.fetchall():
-                    # Find indices
-                    source_idx = next((i for i, n in enumerate(nodes) if n["id"] == source), -1)
-                    target_idx = next((i for i, n in enumerate(nodes) if n["id"] == target), -1)
-                    if source_idx != -1 and target_idx != -1:
+                    if source in id_to_idx and target in id_to_idx:
                         edges.append({
-                            "source": source_idx,
-                            "target": target_idx,
+                            "source": id_to_idx[source],
+                            "target": id_to_idx[target],
                             "type": rel_type
                         })
-            else:
-                edges = []
 
             cursor.close()
             conn.close()
+
+            # Apply force-directed layout using NetworkX
+            if NETWORKX_AVAILABLE and nodes:
+                G = nx.Graph()
+                for i, node in enumerate(nodes):
+                    G.add_node(i)
+                for edge in edges:
+                    G.add_edge(edge["source"], edge["target"])
+
+                # Use spring layout (force-directed)
+                pos = nx.spring_layout(G, k=2.0, iterations=50, seed=42)
+
+                # Scale positions to reasonable range and update nodes
+                for i, node in enumerate(nodes):
+                    if i in pos:
+                        node["x"] = float(pos[i][0]) * 100
+                        node["y"] = float(pos[i][1]) * 100
+
+            # Assign colors by entity type
+            type_colors = {
+                "SYMPTOM": "#ff6b6b",
+                "CONDITION": "#4ecdc4",
+                "MEDICATION": "#45b7d1",
+                "PROCEDURE": "#96ceb4",
+                "ANATOMY": "#ffeaa7",
+                "OBSERVATION": "#dfe6e9",
+            }
+            for node in nodes:
+                node["color"] = type_colors.get(node["type"], "#b2bec3")
 
             return [TextContent(
                 type="text",
@@ -1045,31 +1078,45 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             nodes = []
             edges = []
             node_ids = set()
+            id_to_idx = {}
 
-            # Add query node
+            # Add query node at center
             nodes.append({
                 "id": -1,
                 "name": query,
                 "type": "QUERY",
-                "color": "red",
+                "color": "#e74c3c",
                 "x": 0, "y": 0
             })
+            id_to_idx[-1] = 0
+
+            # Entity type colors
+            type_colors = {
+                "SYMPTOM": "#ff6b6b",
+                "CONDITION": "#4ecdc4",
+                "MEDICATION": "#45b7d1",
+                "PROCEDURE": "#96ceb4",
+                "ANATOMY": "#ffeaa7",
+                "OBSERVATION": "#dfe6e9",
+            }
 
             # Add matched entities
             for eid, text, etype in matched_entities[:limit]:
                 if eid not in node_ids:
+                    idx = len(nodes)
                     nodes.append({
                         "id": eid,
                         "name": text,
                         "type": etype,
-                        "color": "blue",
+                        "color": type_colors.get(etype, "#b2bec3"),
                         "x": 0, "y": 0
                     })
                     node_ids.add(eid)
+                    id_to_idx[eid] = idx
                     # Edge from query to entity
                     edges.append({
-                        "source": 0, # Query is index 0
-                        "target": len(nodes) - 1,
+                        "source": 0,  # Query is index 0
+                        "target": idx,
                         "type": "MATCHES"
                     })
 
@@ -1084,17 +1131,32 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 """, list(node_ids) + list(node_ids))
 
                 for source, target, rel_type in cursor.fetchall():
-                    source_idx = next((i for i, n in enumerate(nodes) if n["id"] == source), -1)
-                    target_idx = next((i for i, n in enumerate(nodes) if n["id"] == target), -1)
-                    if source_idx != -1 and target_idx != -1:
+                    if source in id_to_idx and target in id_to_idx:
                         edges.append({
-                            "source": source_idx,
-                            "target": target_idx,
+                            "source": id_to_idx[source],
+                            "target": id_to_idx[target],
                             "type": rel_type
                         })
 
             cursor.close()
             conn.close()
+
+            # Apply force-directed layout using NetworkX
+            if NETWORKX_AVAILABLE and len(nodes) > 1:
+                G = nx.Graph()
+                for i in range(len(nodes)):
+                    G.add_node(i)
+                for edge in edges:
+                    G.add_edge(edge["source"], edge["target"])
+
+                # Use spring layout with query node at center
+                pos = nx.spring_layout(G, k=2.0, iterations=50, seed=42, center=(0, 0))
+
+                # Scale positions and update nodes
+                for i, node in enumerate(nodes):
+                    if i in pos:
+                        node["x"] = float(pos[i][0]) * 100
+                        node["y"] = float(pos[i][1]) * 100
 
             return [TextContent(
                 type="text",
