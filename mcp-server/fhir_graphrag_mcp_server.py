@@ -338,7 +338,9 @@ async def list_tools() -> List[Tool]:
         Tool(
             name="remember_information",
             description="Store information in agent memory with semantic embedding. "
-                       "Use this to remember user corrections, preferences, domain knowledge, or feedback.",
+                       "Use this to remember user corrections, preferences, domain knowledge, or feedback. "
+                       "IMPORTANT: When storing corrections about tool usage, ALWAYS include the specific tool name "
+                       "(e.g., 'plot_entity_network' not just 'graph'). Rephrase vague user requests to be explicit.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -349,7 +351,9 @@ async def list_tools() -> List[Tool]:
                     },
                     "text": {
                         "type": "string",
-                        "description": "Information to remember (e.g., 'User prefers semantic search')"
+                        "description": "Information to remember. For corrections, include SPECIFIC TOOL NAMES. "
+                                      "Example: 'For knowledge graph queries, use plot_entity_network (network visualization) "
+                                      "instead of plot_entity_distribution (bar chart)'"
                     },
                     "context": {
                         "type": "object",
