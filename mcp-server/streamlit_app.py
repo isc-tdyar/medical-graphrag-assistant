@@ -212,6 +212,33 @@ def extract_entities_from_results(tool_results: List[dict]) -> List[DisplayEntit
                     ) for src in entity_data.get("sources", [])[:10]]
                 ))
 
+            # Also extract entities from relationships (source_text/target_text)
+            # This ensures we show related entities even when the main query only finds 1 entity
+            for rel_data in result_data.get("relationships", []):
+                # Extract source entity from relationship
+                src_id = str(rel_data.get("source_id", ""))
+                src_text = rel_data.get("source_text", "")
+                if src_id and src_text and src_id not in seen_ids:
+                    seen_ids.add(src_id)
+                    entities.append(DisplayEntity(
+                        id=src_id,
+                        name=src_text,
+                        type=EntityType.OTHER,  # Type not available in relationship data
+                        score=0.4  # Lower score since it's a related entity, not a direct match
+                    ))
+
+                # Extract target entity from relationship
+                tgt_id = str(rel_data.get("target_id", ""))
+                tgt_text = rel_data.get("target_text", "")
+                if tgt_id and tgt_text and tgt_id not in seen_ids:
+                    seen_ids.add(tgt_id)
+                    entities.append(DisplayEntity(
+                        id=tgt_id,
+                        name=tgt_text,
+                        type=EntityType.OTHER,
+                        score=0.4
+                    ))
+
         # Extract from hybrid_search
         elif tool_name == "hybrid_search":
             # Hybrid search may include entity matches
