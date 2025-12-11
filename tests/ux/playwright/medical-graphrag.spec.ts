@@ -49,8 +49,8 @@ test.describe('User Story 2: Example Button Interactions', () => {
     // Click "Symptom Chart" button
     await page.click('button:has-text("Symptom Chart")');
 
-    // Wait for chart to render
-    await expect(page.locator('.js-plotly-plot, [data-testid="stPlotlyChart"]')).toBeVisible({ timeout: 30000 });
+    // Wait for chart to render - use .first() to handle multiple charts
+    await expect(page.locator('.js-plotly-plot').first()).toBeVisible({ timeout: 30000 });
   });
 
   test('TC-007: Knowledge Graph button renders network graph', async ({ page }) => {
@@ -59,8 +59,11 @@ test.describe('User Story 2: Example Button Interactions', () => {
     // Click "Knowledge Graph" button
     await page.click('button:has-text("Knowledge Graph")');
 
-    // Wait for network graph to render
-    await expect(page.locator('canvas, .react-graph-vis, svg')).toBeVisible({ timeout: 30000 });
+    // Wait for AI response first
+    await expect(page.locator('.stChatMessage')).toHaveCount(2, { timeout: 30000 });
+
+    // Then check for interactive graph (agraph renders in iframe with stCustomComponentV1 testid)
+    await expect(page.locator('[data-testid="stCustomComponentV1"]')).toBeVisible({ timeout: 5000 });
   });
 });
 
@@ -115,46 +118,49 @@ test.describe('Feature 005: GraphRAG Details Panel', () => {
   });
 
   test('TC-011: Details expander visible after query response', async ({ page }) => {
-    // Look for "Show Execution Details" expander
-    await expect(page.locator('text=Show Execution Details')).toBeVisible({ timeout: 5000 });
+    // Look for "Show Execution Details" expander - use getByText for more specificity
+    await expect(page.getByText('Show Execution Details', { exact: false }).first()).toBeVisible({ timeout: 5000 });
   });
 
   test('TC-012: Entity section visible when details panel expanded', async ({ page }) => {
-    // Click to expand details
-    await page.click('text=Show Execution Details');
+    // Click to expand details - use first() to avoid strict mode issues
+    await page.getByText('Show Execution Details', { exact: false }).first().click();
 
-    // Verify "Entities Found" section is visible
-    await expect(page.locator('text=Entities Found')).toBeVisible({ timeout: 5000 });
+    // Verify "Entities Found" section is visible - use partial match
+    await expect(page.getByText(/Entities Found/)).toBeVisible({ timeout: 5000 });
   });
 
   test('TC-013: Graph section visible in details panel', async ({ page }) => {
     // Click to expand details
-    await page.click('text=Show Execution Details');
+    await page.getByText('Show Execution Details', { exact: false }).first().click();
 
     // Verify "Entity Relationships" section is visible
-    await expect(page.locator('text=Entity Relationships')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Entity Relationships')).toBeVisible({ timeout: 5000 });
   });
 
   test('TC-014: Tool execution section visible in details panel', async ({ page }) => {
     // Click to expand details
-    await page.click('text=Show Execution Details');
+    await page.getByText('Show Execution Details', { exact: false }).first().click();
 
-    // Verify "Tool Execution" section is visible
-    await expect(page.locator('text=Tool Execution')).toBeVisible({ timeout: 5000 });
+    // Verify "Tool Execution" section is visible - match the emoji to avoid settings description text
+    await expect(page.getByText(/⚙️ Tool Execution/)).toBeVisible({ timeout: 5000 });
   });
 
   test('TC-015: Sub-sections are independently collapsible', async ({ page }) => {
     // Click to expand details
-    await page.click('text=Show Execution Details');
+    await page.getByText('Show Execution Details', { exact: false }).first().click();
 
-    // Verify entities section exists
-    const entitiesSection = page.locator('text=Entities Found');
+    // Verify entities section exists - use regex for partial match
+    const entitiesSection = page.getByText(/Entities Found/);
     await expect(entitiesSection).toBeVisible();
 
     // Click to collapse entities section
     await entitiesSection.click();
 
-    // The expander should still be clickable (toggle behavior)
+    // Small wait for state change
+    await page.waitForTimeout(500);
+
+    // The expander header should still be clickable (toggle behavior)
     // Click again to expand
     await entitiesSection.click();
     await expect(entitiesSection).toBeVisible();
