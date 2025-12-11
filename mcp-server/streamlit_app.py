@@ -444,12 +444,25 @@ DETAILS_SESSION_KEYS = {
     "details_show_all_entities": False,
 }
 
+# App Settings session state keys
+APP_SETTINGS_KEYS = {
+    "show_tool_prompts": False,  # Show full tool input/prompts in execution details
+    "auto_expand_tool_details": False,  # Auto-expand tool details in execution panel
+}
+
 MAX_DISPLAY_ENTITIES = 50
 
 
 def _init_details_session_state():
     """Initialize session state keys for details panel if not present."""
     for key, default in DETAILS_SESSION_KEYS.items():
+        if key not in st.session_state:
+            st.session_state[key] = default
+
+
+def _init_app_settings():
+    """Initialize app settings session state keys if not present."""
+    for key, default in APP_SETTINGS_KEYS.items():
         if key not in st.session_state:
             st.session_state[key] = default
 
@@ -693,6 +706,7 @@ def render_tools_section(tool_executions: List[ToolExecution], msg_idx: int) -> 
         msg_idx: Message index for unique keys
     """
     _init_details_session_state()
+    _init_app_settings()
 
     # Calculate total duration
     total_duration_ms = sum(t.duration_ms for t in tool_executions)
@@ -707,6 +721,10 @@ def render_tools_section(tool_executions: List[ToolExecution], msg_idx: int) -> 
         if not tool_executions:
             st.info("No tool executions recorded")
             return
+
+        # Check if tool prompts should be shown (from app settings)
+        show_prompts = st.session_state.get("show_tool_prompts", False)
+        auto_expand = st.session_state.get("auto_expand_tool_details", False)
 
         for idx, tool in enumerate(tool_executions):
             # Status icon
@@ -726,9 +744,15 @@ def render_tools_section(tool_executions: List[ToolExecution], msg_idx: int) -> 
             # Tool header
             st.markdown(f"{status_icon} **{tool.tool_name}** `{duration_str}`")
 
-            # Expandable details for each tool
-            with st.expander(f"Details", expanded=False):
-                if tool.parameters:
+            # If show_prompts is enabled, show parameters inline (not in expander)
+            if show_prompts and tool.parameters:
+                st.markdown("**Tool Input/Prompt:**")
+                st.code(json.dumps(tool.parameters, indent=2), language="json")
+
+            # Expandable details for each tool (auto-expand if setting enabled)
+            with st.expander(f"Details", expanded=auto_expand):
+                if tool.parameters and not show_prompts:
+                    # Only show in expander if not already shown inline
                     st.markdown("**Parameters:**")
                     st.code(json.dumps(tool.parameters, indent=2), language="json")
                 if tool.result_summary:
@@ -1966,7 +1990,7 @@ def chat_with_tools(user_message: str):
 # UI
 st.title("🤖 Agentic Medical Chat")
 st.caption("Claude autonomously calls MCP tools to answer your questions")
-st.caption("🔧 **Build: v2.14.0** - Auto memory recall, interactive graph viz, force-directed layouts")
+st.caption("🔧 **Build: v2.15.0** - App settings, tool prompt transparency, entity relationship parsing fix")
 
 # Sidebar
 with st.sidebar:
@@ -2052,6 +2076,30 @@ with st.sidebar:
 
         except Exception as e:
             st.error(f"Memory system error: {e}")
+
+    # App Settings UI
+    st.divider()
+    st.header("Settings")
+    _init_app_settings()
+
+    with st.expander("Debug & Transparency", expanded=False):
+        show_tool_prompts = st.checkbox(
+            "Show tool prompts/inputs",
+            value=st.session_state.get("show_tool_prompts", False),
+            key="show_tool_prompts_toggle",
+            help="Display the full input/prompt sent to each tool in the execution details"
+        )
+        st.session_state.show_tool_prompts = show_tool_prompts
+
+        auto_expand = st.checkbox(
+            "Auto-expand tool details",
+            value=st.session_state.get("auto_expand_tool_details", False),
+            key="auto_expand_toggle",
+            help="Automatically expand the Details section for each tool execution"
+        )
+        st.session_state.auto_expand_tool_details = auto_expand
+
+        st.caption("These settings affect the 'Tool Execution' section in response details.")
 
 # Display chat
 for idx, msg in enumerate(st.session_state.messages):
