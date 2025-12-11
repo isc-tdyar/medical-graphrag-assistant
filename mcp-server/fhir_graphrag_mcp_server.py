@@ -495,7 +495,8 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                             'text': text,
                             'type': entity_type,
                             'confidence': float(confidence) if confidence else 0.0,
-                            'matched_keyword': keyword
+                            'matched_keyword': keyword,
+                            'source': 'direct_match'  # Mark as direct query match
                         })
 
             all_entities.sort(key=lambda x: x['confidence'], reverse=True)
@@ -528,9 +529,11 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     })
 
                 # Get relationships between found entities from EntityRelationships table
+                # Enhanced query: also fetch entity types for related entities
                 rel_sql = f"""
                     SELECT r.SourceEntityID, r.TargetEntityID, r.RelationshipType,
-                           e1.EntityText as SourceText, e2.EntityText as TargetText
+                           e1.EntityText as SourceText, e1.EntityType as SourceType, e1.Confidence as SourceConf,
+                           e2.EntityText as TargetText, e2.EntityType as TargetType, e2.Confidence as TargetConf
                     FROM SQLUser.EntityRelationships r
                     JOIN SQLUser.Entities e1 ON r.SourceEntityID = e1.EntityID
                     JOIN SQLUser.Entities e2 ON r.TargetEntityID = e2.EntityID
@@ -539,7 +542,13 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 """
                 cursor.execute(rel_sql, entity_ids + entity_ids)
                 seen_rels = set()
-                for src_id, tgt_id, rel_type, src_text, tgt_text in cursor.fetchall():
+
+                # Track entities extracted from relationships (for complete entity list)
+                related_entities = []
+
+                for row in cursor.fetchall():
+                    src_id, tgt_id, rel_type, src_text, src_type, src_conf, tgt_text, tgt_type, tgt_conf = row
+
                     # Deduplicate relationships
                     rel_key = f"{min(src_id, tgt_id)}_{max(src_id, tgt_id)}"
                     if rel_key not in seen_rels:
@@ -552,6 +561,35 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                             'type': rel_type or 'related'
                         })
 
+                    # ENHANCEMENT: Extract complete entity objects from relationships
+                    # This ensures all related entities are returned with full metadata
+                    if src_id not in seen_ids:
+                        seen_ids.add(src_id)
+                        related_entities.append({
+                            'id': src_id,
+                            'text': src_text,
+                            'type': src_type,
+                            'confidence': float(src_conf) if src_conf else 0.4,
+                            'source': 'relationship'  # Mark as discovered via relationship
+                        })
+
+                    if tgt_id not in seen_ids:
+                        seen_ids.add(tgt_id)
+                        related_entities.append({
+                            'id': tgt_id,
+                            'text': tgt_text,
+                            'type': tgt_type,
+                            'confidence': float(tgt_conf) if tgt_conf else 0.4,
+                            'source': 'relationship'  # Mark as discovered via relationship
+                        })
+
+                # Combine direct matches with related entities
+                # Direct matches first (higher relevance), then related entities
+                all_result_entities = top_entities + related_entities
+
+            else:
+                all_result_entities = top_entities
+
             cursor.close()
             conn.close()
 
@@ -559,8 +597,10 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 type="text",
                 text=json.dumps({
                     "query": query,
-                    "entities_found": len(top_entities),
-                    "entities": top_entities,
+                    "entities_found": len(all_result_entities),
+                    "direct_matches": len(top_entities),
+                    "related_entities": len(all_result_entities) - len(top_entities),
+                    "entities": all_result_entities,
                     "relationships_found": len(relationships),
                     "relationships": relationships,
                     "documents_found": len(documents),
