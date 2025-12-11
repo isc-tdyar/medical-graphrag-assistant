@@ -166,6 +166,10 @@ def extract_entities_from_results(tool_results: List[dict]) -> List[DisplayEntit
     Parses entities from search_knowledge_graph, hybrid_search, and
     visualize_graphrag_results tool outputs.
 
+    NOTE: As of v2.16.0, the backend search_knowledge_graph tool now returns
+    complete entity objects (including entities discovered via relationships).
+    This function still handles legacy responses and other tools.
+
     Args:
         tool_results: List of tool call results from the AI response
 
@@ -199,12 +203,15 @@ def extract_entities_from_results(tool_results: List[dict]) -> List[DisplayEntit
                 # Handle both 'score', 'relevance', and 'confidence' field names
                 score = entity_data.get("score") or entity_data.get("confidence") or entity_data.get("relevance", 0.0)
 
+                # Check if this is a direct match or discovered via relationship (v2.16.0+)
+                entity_source = entity_data.get("source", "direct_match")
+
                 entities.append(DisplayEntity(
                     id=entity_id,
                     name=entity_name,
                     type=_map_entity_type(entity_data.get("type", "other")),
                     score=float(score) if score else 0.0,
-                    context=entity_data.get("context", "")[:500],
+                    context=entity_data.get("context", "")[:500] if entity_data.get("context") else entity_source,
                     sources=[SourceReference(
                         document_id=src.get("doc_id", ""),
                         document_type=src.get("doc_type", ""),
@@ -212,8 +219,8 @@ def extract_entities_from_results(tool_results: List[dict]) -> List[DisplayEntit
                     ) for src in entity_data.get("sources", [])[:10]]
                 ))
 
-            # Also extract entities from relationships (source_text/target_text)
-            # This ensures we show related entities even when the main query only finds 1 entity
+            # LEGACY FALLBACK: Extract entities from relationships if backend doesn't include them
+            # This handles older backend versions that don't include related entities in the entities list
             for rel_data in result_data.get("relationships", []):
                 # Extract source entity from relationship
                 src_id = str(rel_data.get("source_id", ""))
@@ -223,7 +230,7 @@ def extract_entities_from_results(tool_results: List[dict]) -> List[DisplayEntit
                     entities.append(DisplayEntity(
                         id=src_id,
                         name=src_text,
-                        type=EntityType.OTHER,  # Type not available in relationship data
+                        type=EntityType.OTHER,  # Type not available in legacy relationship data
                         score=0.4  # Lower score since it's a related entity, not a direct match
                     ))
 
@@ -1990,7 +1997,7 @@ def chat_with_tools(user_message: str):
 # UI
 st.title("🤖 Agentic Medical Chat")
 st.caption("Claude autonomously calls MCP tools to answer your questions")
-st.caption("🔧 **Build: v2.15.0** - App settings, tool prompt transparency, entity relationship parsing fix")
+st.caption("🔧 **Build: v2.16.0** - Backend returns complete entity objects (best practice)")
 
 # Sidebar
 with st.sidebar:
