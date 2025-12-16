@@ -1268,12 +1268,15 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     
                     search_mode = "semantic"
 
-                    # Updated SQL: Include similarity score in results (T017)
+                    # Updated SQL: Include similarity score and patient info via LEFT JOIN (T013-T016)
                     sql = f"""
                         SELECT TOP ?
-                            ImageID, StudyID, SubjectID, ViewPosition, ImagePath,
-                            VECTOR_COSINE(Vector, TO_VECTOR(?, double)) AS Similarity
-                        FROM VectorSearch.MIMICCXRImages
+                            i.ImageID, i.StudyID, i.SubjectID, i.ViewPosition, i.ImagePath,
+                            VECTOR_COSINE(i.Vector, TO_VECTOR(?, double)) AS Similarity,
+                            m.FHIRPatientID, m.FHIRPatientName
+                        FROM VectorSearch.MIMICCXRImages i
+                        LEFT JOIN VectorSearch.PatientImageMapping m
+                            ON i.SubjectID = m.MIMICSubjectID
                         ORDER BY Similarity DESC
                     """
                     cursor.execute(sql, (limit, vector_str))
@@ -1307,20 +1310,28 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 """
                 cursor.execute(sql, [limit] + params)
 
-            # Process results with scoring metadata
+            # Process results with scoring metadata and patient info (T014-T016)
             scores = []
             for row in cursor.fetchall():
                 if search_mode == "semantic":
-                    # Semantic search returns 6 columns (including similarity)
-                    image_id, study_id, subject_id, view_pos, image_path, similarity = row
+                    # Semantic search returns 8 columns (including similarity + patient info)
+                    image_id, study_id, subject_id, view_pos, image_path, similarity, fhir_patient_id, fhir_patient_name = row
                     similarity_score = float(similarity) if similarity is not None else 0.0
-                    
+
                     # Filter by min_score if specified
                     if similarity_score < min_score:
                         continue
-                    
+
                     scores.append(similarity_score)
-                    
+
+                    # Build patient display name - use linked name or show as unlinked (T016)
+                    if fhir_patient_name:
+                        patient_display = fhir_patient_name
+                        patient_linked = True
+                    else:
+                        patient_display = f"Unlinked - Source ID: {subject_id}"
+                        patient_linked = False
+
                     results.append({
                         "image_id": image_id,
                         "study_id": study_id,
@@ -1330,11 +1341,16 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                         "similarity_score": similarity_score,
                         "score_color": get_score_color(similarity_score),
                         "confidence_level": get_confidence_level(similarity_score),
-                        "description": f"Chest X-ray ({view_pos}) for patient {subject_id}",
-                        "embedding_model": "nvidia/nvclip"
+                        "description": f"Chest X-ray ({view_pos}) - {patient_display}",
+                        "embedding_model": "nvidia/nvclip",
+                        # Patient info fields (T014)
+                        "patient_name": fhir_patient_name,
+                        "fhir_patient_id": fhir_patient_id,
+                        "patient_linked": patient_linked,
+                        "patient_display": patient_display
                     })
                 else:
-                    # Keyword search returns 5 columns (no similarity)
+                    # Keyword search returns 5 columns (no similarity, no patient info yet)
                     image_id, study_id, subject_id, view_pos, image_path = row
                     results.append({
                         "image_id": image_id,
@@ -1342,7 +1358,9 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                         "subject_id": subject_id,
                         "view_position": view_pos,
                         "image_path": image_path,
-                        "description": f"Chest X-ray ({view_pos}) for patient {subject_id}"
+                        "description": f"Chest X-ray ({view_pos}) - Unlinked - Source ID: {subject_id}",
+                        "patient_linked": False,
+                        "patient_display": f"Unlinked - Source ID: {subject_id}"
                     })
 
             cursor.close()
