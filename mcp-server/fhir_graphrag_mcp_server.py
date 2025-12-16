@@ -528,9 +528,23 @@ async def list_tools() -> List[Tool]:
 async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
     """Handle tool invocations."""
 
+    # Tools that use FHIR REST only (no IRIS DB connection required)
+    FHIR_REST_ONLY_TOOLS = {
+        "get_patient_imaging_studies",
+        "get_imaging_study_details",
+        "get_radiology_reports",
+        "search_patients_with_imaging",
+        "get_encounter_imaging",
+        "list_radiology_queries"
+    }
+
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        # Only get IRIS connection for tools that need it
+        conn = None
+        cursor = None
+        if name not in FHIR_REST_ONLY_TOOLS:
+            conn = get_connection()
+            cursor = conn.cursor()
 
         if name == "search_fhir_documents":
             query = arguments["query"]
