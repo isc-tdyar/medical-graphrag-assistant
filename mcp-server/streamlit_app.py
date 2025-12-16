@@ -1391,14 +1391,18 @@ def render_chart(tool_name: str, data, unique_id: str = None):
                     # Use image path if available, or placeholder
                     img_path = img.get("image_path")
                     study_type = img.get('study_type', 'Unknown Study')
-                    patient_id = img.get('patient_id', 'Unknown Patient')
                     image_id = img.get('image_id', 'Unknown ID')
 
-                    # Build caption with score badge
+                    # T017: Use patient_display from radiology integration (linked patient name or unlinked fallback)
+                    patient_display = img.get('patient_display', img.get('patient_name', 'Unknown Patient'))
+                    patient_linked = img.get('patient_linked', False)
+
+                    # Build caption with score badge - style patient differently if linked vs unlinked
+                    patient_style = "color: #28a745;" if patient_linked else "color: #dc3545; font-style: italic;"
                     caption_html = f"""
                     <div style='text-align: center; margin-bottom: 8px;'>
                         <strong>{study_type}</strong><br/>
-                        <small>Patient: {patient_id}</small><br/>
+                        <small style='{patient_style}'>{patient_display}</small><br/>
                         <small style='color: #666;'>ID: {image_id[:8]}...</small>
                     </div>
                     """
@@ -1437,7 +1441,7 @@ def render_chart(tool_name: str, data, unique_id: str = None):
                                     st.image(dicom_img, use_container_width=True)
                                 else:
                                     st.warning(f"Could not load DICOM: {os.path.basename(img_path)}")
-                                    st.info(f"{study_type} - Patient {patient_id}")
+                                    st.info(f"{study_type} - {patient_display}")
                             else:
                                 # Regular image file (PNG, JPG, etc.)
                                 st.image(img_path, use_container_width=True)
