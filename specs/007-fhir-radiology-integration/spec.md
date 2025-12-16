@@ -146,12 +146,20 @@ Users of the agentic chat interface need MCP tools to query integrated FHIR radi
 - **SC-008**: MCP tool queries return results within 1 second for single-patient lookups
 - **SC-009**: Users can ask natural language questions about patient imaging and receive accurate FHIR-sourced responses
 
+## Clarifications
+
+### Session 2025-12-15
+- Q: When MIMIC-CXR subject_ids don't match existing FHIR patients, what is the preferred strategy? → A: Create new synthetic FHIR patients using Synthea to ensure internal consistency (demographics, conditions, encounters)
+- Q: What FHIR server implementation is currently running? → A: InterSystems IRIS for Health FHIR repository
+- Q: For FR-004 (creating FHIR DiagnosticReport resources), where will the clinical findings/interpretations come from? → A: Use existing MIMIC-CXR radiology report text files, stored as FHIR DiagnosticReport resources with standard representation in the FHIR repository
+
 ## Assumptions
 
 - MIMIC-CXR subject_ids (e.g., p10002428) can be deterministically mapped to existing synthetic FHIR Patient resources
-- For demo purposes, we may need to create new FHIR Patient resources to match MIMIC subject_ids that don't exist
+- For unmatched MIMIC subject_ids, new FHIR Patient resources will be generated using Synthea to ensure internally consistent patient records (demographics, conditions, encounters)
 - Study-to-Encounter matching will use a 24-hour window when exact timestamps don't match
 - The existing synthetic FHIR data can be modified to create coherent patient stories without compliance concerns (since it's synthetic data)
 - FHIR R4 resource definitions will be used for ImagingStudy, DiagnosticReport, and related resources
 - MCP tool architecture follows patterns from FHIRMcpServer reference implementation (3 core tools: getCapabilityResource, getQueryList, callQuery)
-- Existing FHIR server infrastructure (currently on EC2) will be extended to support ImagingStudy queries
+- InterSystems IRIS for Health FHIR repository (on EC2) will be extended to support ImagingStudy queries via REST API
+- MIMIC-CXR radiology report text files will be imported and stored as FHIR DiagnosticReport resources with standard representation (conclusionCode, presentedForm)
