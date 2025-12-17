@@ -1,18 +1,18 @@
 # TODO: Medical GraphRAG Assistant
 
-**Last Updated**: November 22, 2025
-**Current Version**: v2.12.0
+**Last Updated**: December 17, 2025
+**Current Version**: v2.15.0
 
 ---
 
 ## Current Sprint ✅ COMPLETE
 
-### Documentation Review & Cleanup (November 22, 2025)
-- [x] Clean up root directory (moved to archive/)
-- [x] Review and update README.md with v2.12.0 features
-- [x] Create STATUS.md with current system state
-- [x] Update TODO.md to reflect actual priorities
-- [x] Organize historical documentation
+### GraphRAG Details Panel (December 2025)
+- [x] Enhanced details panel with entity, graph, and tool sections
+- [x] Interactive Plotly-based graph visualization
+- [x] Tool execution timeline with parameters and results
+- [x] Mobile-responsive design with fallback displays
+- [x] App Settings with debug transparency toggles
 
 ---
 
@@ -90,7 +90,27 @@
 
 ## Completed (Recent) ✅
 
-### v2.12.0: Agent Memory & Medical Image Search (November 22, 2025)
+### v2.15.0: GraphRAG Details Panel (December 2025)
+- [x] Enhanced execution details panel with three collapsible sections
+- [x] Entity section with type grouping and relevance scores
+- [x] Interactive Plotly graph visualization in details panel
+- [x] Tool execution timeline with parameters and status icons
+- [x] App Settings with debug transparency toggles
+- [x] Mobile-responsive design with graceful fallbacks
+- [x] Playwright MCP UX test suite for validation
+
+### v2.14.0: Auto Memory Recall & Interactive Graphs (December 2025)
+- [x] Auto memory recall before each query for tool guidance
+- [x] Interactive force-directed graphs with streamlit-agraph
+- [x] Memory display in execution log
+- [x] NetworkX-powered graph layouts
+
+### v2.13.0: Multi-LLM Provider Support (December 2025)
+- [x] Multiple LLM provider support (NIM > OpenAI > Bedrock fallback)
+- [x] OneDrive cloud backup integration
+- [x] Improved memory tool with correction guidance
+
+### v2.12.0: Agent Memory & Medical Image Search (November 2025)
 - [x] Pure IRIS vector memory system (no SQLite)
 - [x] Medical image search with NV-CLIP embeddings
 - [x] Memory editor UI in Streamlit sidebar
@@ -170,10 +190,11 @@
 ## Notes & Context
 
 ### Current System State
-- **Version**: v2.12.0
-- **AWS Deployment**: ✅ Operational
+- **Version**: v2.15.0
+- **AWS Deployment**: ✅ Operational (13.218.19.254)
 - **Local Development**: ✅ Active (via SSH tunnel)
 - **Integration Tests**: 13/13 passing
+- **UX Tests**: Playwright MCP test suite available
 - **Data Scale**: 51 documents, 50 images, 83 entities, ~5 memories
 
 ### Performance Benchmarks
