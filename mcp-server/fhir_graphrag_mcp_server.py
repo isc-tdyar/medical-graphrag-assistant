@@ -637,7 +637,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             for keyword in keywords:
                 sql = """
                     SELECT EntityID, EntityText, EntityType, Confidence
-                    FROM SQLUser.Entities
+                    FROM RAG.Entities
                     WHERE LOWER(EntityText) LIKE ?
                     ORDER BY Confidence DESC
                     LIMIT ?
@@ -672,7 +672,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 doc_sql = f"""
                     SELECT DISTINCT e.ResourceID, f.FHIRResourceId,
                            COUNT(DISTINCT e.EntityID) as EntityCount
-                    FROM SQLUser.Entities e
+                    FROM RAG.Entities e
                     JOIN SQLUser.FHIRDocuments f ON e.ResourceID = f.FHIRResourceId
                     WHERE e.EntityID IN ({placeholders})
                     GROUP BY e.ResourceID, f.FHIRResourceId
@@ -692,9 +692,9 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     SELECT r.SourceEntityID, r.TargetEntityID, r.RelationshipType,
                            e1.EntityText as SourceText, e1.EntityType as SourceType, e1.Confidence as SourceConf,
                            e2.EntityText as TargetText, e2.EntityType as TargetType, e2.Confidence as TargetConf
-                    FROM SQLUser.EntityRelationshipsr
-                    JOIN SQLUser.Entities e1 ON r.SourceEntityID = e1.EntityID
-                    JOIN SQLUser.Entities e2 ON r.TargetEntityID = e2.EntityID
+                    FROM RAG.EntityRelationships r
+                    JOIN RAG.Entities e1 ON r.SourceEntityID = e1.EntityID
+                    JOIN RAG.Entities e2 ON r.TargetEntityID = e2.EntityID
                     WHERE r.SourceEntityID IN ({placeholders})
                     OR r.TargetEntityID IN ({placeholders})
                 """
@@ -810,7 +810,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
 
             for keyword in keywords[:3]:  # Limit to 3 keywords
                 entity_sql = """
-                    SELECT EntityID FROM SQLUser.Entities
+                    SELECT EntityID FROM RAG.Entities
                     WHERE LOWER(EntityText) LIKE ?
                     LIMIT 5
                 """
@@ -824,7 +824,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 placeholders = ','.join(['?'] * len(entity_list))
                 doc_sql = f"""
                     SELECT DISTINCT f.FHIRResourceId
-                    FROM SQLUser.Entities e
+                    FROM RAG.Entities e
                     JOIN SQLUser.FHIRDocuments f ON e.ResourceID = f.FHIRResourceId
                     WHERE e.EntityID IN ({placeholders})
                 """
@@ -890,7 +890,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             # Find entity
             sql = """
                 SELECT EntityID, EntityText, EntityType, Confidence
-                FROM SQLUser.Entities
+                FROM RAG.Entities
                 WHERE LOWER(EntityText) LIKE ?
                 ORDER BY Confidence DESC
                 LIMIT 1
@@ -928,9 +928,9 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                         r.SourceEntityID, r.TargetEntityID, r.RelationshipType,
                         e1.EntityText as SourceText, e1.EntityType as SourceType,
                         e2.EntityText as TargetText, e2.EntityType as TargetType
-                    FROM SQLUser.EntityRelationshipsr
-                    JOIN SQLUser.Entities e1 ON r.SourceEntityID = e1.EntityID
-                    JOIN SQLUser.Entities e2 ON r.TargetEntityID = e2.EntityID
+                    FROM RAG.EntityRelationships r
+                    JOIN RAG.Entities e1 ON r.SourceEntityID = e1.EntityID
+                    JOIN RAG.Entities e2 ON r.TargetEntityID = e2.EntityID
                     WHERE r.SourceEntityID IN ({placeholders})
                        OR r.TargetEntityID IN ({placeholders})
                 """
@@ -1026,7 +1026,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             # Entity count by type
             stats_sql = """
                 SELECT EntityType, COUNT(*) as EntityCount
-                FROM SQLUser.Entities
+                FROM RAG.Entities
                 GROUP BY EntityType
                 ORDER BY EntityCount DESC
             """
@@ -1037,16 +1037,16 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 entity_stats.append({'type': entity_type, 'count': count})
 
             # Total counts
-            cursor.execute("SELECT COUNT(*) FROM SQLUser.Entities")
+            cursor.execute("SELECT COUNT(*) FROM RAG.Entities")
             total_entities = cursor.fetchone()[0]
 
-            cursor.execute("SELECT COUNT(*) FROM SQLUser.Relationship")
+            cursor.execute("SELECT COUNT(*) FROM RAG.EntityRelationships")
             total_relationships = cursor.fetchone()[0]
 
             # High confidence entities
             cursor.execute("""
                 SELECT TOP 10 EntityText, EntityType, Confidence
-                FROM SQLUser.Entities
+                FROM RAG.Entities
                 ORDER BY Confidence DESC
             """)
 
@@ -1077,7 +1077,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             # Get entity type distribution
             cursor.execute("""
                 SELECT EntityType, COUNT(*) as EntityCount
-                FROM SQLUser.Entities
+                FROM RAG.Entities
                 GROUP BY EntityType
                 ORDER BY EntityCount DESC
             """)
@@ -1116,7 +1116,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             # Get temporal entities (dates)
             cursor.execute("""
                 SELECT EntityText, COUNT(*) as Frequency
-                FROM SQLUser.Entities
+                FROM RAG.Entities
                 WHERE EntityType = 'TEMPORAL'
                 GROUP BY EntityText
                 ORDER BY EntityText
@@ -1162,8 +1162,8 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 SELECT TOP {top_n}
                     e.EntityText,
                     COUNT(DISTINCT er.RelationshipID) as Frequency
-                FROM SQLUser.Entities e
-                LEFT JOIN SQLUser.EntityRelationshipser
+                FROM RAG.Entities e
+                LEFT JOIN RAG.EntityRelationships er
                     ON e.EntityID = er.SourceEntityID OR e.EntityID = er.TargetEntityID
                 WHERE e.EntityType = 'SYMPTOM'
                 GROUP BY e.EntityText
@@ -1205,7 +1205,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             # Get top entities and their relationships
             cursor.execute(f"""
                 SELECT TOP {max_nodes} EntityID, EntityText, EntityType
-                FROM SQLUser.Entities
+                FROM RAG.Entities
                 {'WHERE EntityType = ?' if entity_type != 'all' else ''}
                 ORDER BY Confidence DESC
             """, (entity_type,) if entity_type != 'all' else ())
@@ -1229,7 +1229,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 placeholders = ','.join(['?'] * len(node_ids))
                 cursor.execute(f"""
                     SELECT SourceEntityID, TargetEntityID, RelationshipType
-                    FROM SQLUser.Relationship
+                    FROM RAG.EntityRelationships
                     WHERE SourceEntityID IN ({placeholders})
                     AND TargetEntityID IN ({placeholders})
                 """, list(node_ids) + list(node_ids))
@@ -1296,7 +1296,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             for keyword in keywords:
                 cursor.execute("""
                     SELECT EntityID, EntityText, EntityType
-                    FROM SQLUser.Entities
+                    FROM RAG.Entities
                     WHERE LOWER(EntityText) LIKE ?
                     ORDER BY Confidence DESC
                     LIMIT 5
@@ -1355,7 +1355,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 placeholders = ','.join(['?'] * len(node_ids))
                 cursor.execute(f"""
                     SELECT SourceEntityID, TargetEntityID, RelationshipType
-                    FROM SQLUser.Relationship
+                    FROM RAG.EntityRelationships
                     WHERE SourceEntityID IN ({placeholders})
                     AND TargetEntityID IN ({placeholders})
                 """, list(node_ids) + list(node_ids))
