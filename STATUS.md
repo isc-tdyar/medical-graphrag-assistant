@@ -1,7 +1,7 @@
 # Medical GraphRAG Assistant - System Status
 
-**Last Updated**: November 22, 2025
-**Version**: v2.12.0
+**Last Updated**: December 17, 2025
+**Version**: v2.15.0
 
 ## System Health: ✅ OPERATIONAL
 
@@ -14,7 +14,7 @@ All core systems are functioning and deployed to production.
 ### Infrastructure
 - **Status**: ✅ Running
 - **Instance**: EC2 g5.xlarge (i-0432eba10b98c4949)
-- **Public IP**: 3.84.250.46
+- **Public IP**: 13.218.19.254
 - **Region**: us-east-1
 - **GPU**: NVIDIA A10G (available)
 - **OS**: Ubuntu 24.04 LTS
@@ -57,12 +57,12 @@ All core systems are functioning and deployed to production.
 - **Status**: ✅ Running
 - **URL**: http://localhost:8501
 - **Process**: streamlit run (PID varies)
-- **Version**: v2.12.0 with Agent Memory Editor
+- **Version**: v2.15.0 with GraphRAG Details Panel
 
 ### SSH Tunnel
 - **Status**: ✅ Active
 - **Purpose**: Local access to AWS NIM (port 8002)
-- **Command**: `ssh -f -N -L 8002:localhost:8002 -i ~/.ssh/medical-graphrag-key.pem ubuntu@3.84.250.46`
+- **Command**: `ssh -f -N -L 8002:localhost:8002 -i ~/.ssh/fhir-ai-key-recovery.pem ubuntu@13.218.19.254`
 - **Note**: Required for local NV-CLIP embeddings
 
 ### Python Environment
@@ -89,9 +89,29 @@ All core systems are functioning and deployed to production.
 - [x] MCP server with 10+ tools
 - [x] Streamlit chat interface
 
-### Recent Fixes (v2.12.0) ✅
-- [x] Real NV-CLIP embeddings for images (fixed from mock vectors)
-- [x] Real NV-CLIP embeddings for memories (fixed from mock vectors)
+### Recent Features ✅
+
+**v2.15.0 (December 2025)**
+- [x] Enhanced details panel with entity, graph, and tool sections
+- [x] Interactive Plotly-based graph visualization
+- [x] Tool execution timeline with parameters and results
+- [x] App Settings with debug transparency toggles
+- [x] Mobile-responsive design with fallback displays
+- [x] Playwright MCP UX test suite for validation
+
+**v2.14.0 (December 2025)**
+- [x] Auto memory recall before each query for tool guidance
+- [x] Interactive force-directed graphs with streamlit-agraph
+- [x] Memory display in execution log
+- [x] NetworkX-powered graph layouts
+
+**v2.13.0 (December 2025)**
+- [x] Multiple LLM provider support (NIM > OpenAI > Bedrock fallback)
+- [x] OneDrive cloud backup integration
+- [x] Improved memory tool with correction guidance
+
+**v2.12.0 (November 2025)**
+- [x] Real NV-CLIP embeddings for images and memories
 - [x] Memory search UI session state persistence
 - [x] Empty search string support (browse all memories)
 - [x] Type conversion for similarity scores (IRIS string→float)
@@ -117,7 +137,7 @@ All core systems are functioning and deployed to production.
 export AWS_PROFILE=122293094970_PowerUserPlusAccess
 
 # IRIS Database
-export IRIS_HOST=3.84.250.46
+export IRIS_HOST=13.218.19.254
 export IRIS_PORT=1972
 export IRIS_NAMESPACE=%SYS
 export IRIS_USERNAME=_SYSTEM
@@ -178,13 +198,16 @@ export NVCLIP_BASE_URL=http://localhost:8002/v1  # via SSH tunnel
 
 ## Deployment History
 
-### Latest Deployment: v2.12.0 (November 22, 2025)
-- Agent memory system with pure IRIS vectors
-- Medical image search with NV-CLIP
-- Memory editor UI in Streamlit sidebar
-- Embeddings fixes (real vectors, not mocks)
+### Latest Deployment: v2.15.0 (December 17, 2025)
+- GraphRAG Details Panel with entity, graph, and tool sections
+- Interactive Plotly-based graph visualization
+- App Settings with debug transparency toggles
+- Playwright MCP UX test suite for validation
 
 ### Previous Major Releases
+- **v2.14.0**: Auto memory recall, interactive force-directed graphs
+- **v2.13.0**: Multi-LLM provider support, OneDrive backup
+- **v2.12.0**: Agent memory system with pure IRIS vectors
 - **v2.10.0**: GraphRAG multi-modal search
 - **v2.0.0**: AWS deployment with NVIDIA NIM
 - **v1.0.0**: Initial FHIR + vector search
