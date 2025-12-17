@@ -4,8 +4,8 @@
 # Database Connection Settings (AWS EC2)
 database:
   iris:
-    host: "3.84.250.46"            # AWS EC2 public IP
-    port: 1972                     # IRIS SQL port
+    host: "localhost"              # Local on EC2 (Docker container)
+    port: 32782                    # IRIS SQL port (Docker mapped)
     namespace: "%SYS"              # Use %SYS namespace (DEMO has access restrictions on AWS)
     username: "_SYSTEM"            # Database username
     password: "SYS"                # SuperUser password
@@ -96,7 +96,7 @@ pipelines:
 llm:
   provider: "nvidia_nim"
   model: "nvidia/llama-3.1-nemotron-70b-instruct"
-  base_url: "http://3.84.250.46:8000"  # NIM LLM service on AWS
+  base_url: "http://localhost:8000"    # NIM LLM service (local on EC2)
   temperature: 0.0
   max_tokens: 500
   timeout: 30
