@@ -29,7 +29,9 @@ from datetime import datetime, timedelta
 
 # Configuration
 FHIR_BASE_URL = os.getenv('FHIR_BASE_URL', "http://localhost:32783/csp/healthshare/demo/fhir/r4")
-# Note: FHIR server has unauthenticated access enabled, no auth header needed
+FHIR_USERNAME = os.getenv('FHIR_USERNAME', "_SYSTEM")
+FHIR_PASSWORD = os.getenv('FHIR_PASSWORD', "sys")
+AUTH_HEADER = "Basic " + base64.b64encode(f"{FHIR_USERNAME}:{FHIR_PASSWORD}".encode()).decode()
 
 # IRIS connection - for local Docker
 IRIS_HOST = os.getenv('IRIS_HOST', 'localhost')
@@ -249,7 +251,7 @@ def put_fhir_resource(resource, resource_type=None, resource_id=None):
     req = urllib.request.Request(url, data=data, method="PUT")
     req.add_header("Content-Type", "application/fhir+json")
     req.add_header("Accept", "application/fhir+json")
-    # No authentication required - FHIR server has unauthenticated access enabled
+    req.add_header("Authorization", AUTH_HEADER)
 
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
