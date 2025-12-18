@@ -1,28 +1,109 @@
 ; FHIR Server Setup - Using HealthShare Foundation
+; This script installs the FHIR server during Docker build
+write !,"========================================",!
+write "FHIR Server Installation Starting...",!
+write "========================================",!
+
 zn "USER"
+write "Installing ZPM package manager...",!
 set r = ##class(%Net.HttpRequest).%New()
 set r.Server = "pm.community.intersystems.com"
 set r.SSLConfiguration = "ISC.FeatureTracker.SSL.Config"
-do r.Get("/packages/zpm/latest/installer")
+set sc = r.Get("/packages/zpm/latest/installer")
+if $$$ISERR(sc) { write "ERROR: Failed to get ZPM: ",$system.Status.GetErrorText(sc),! } else { write "ZPM download OK",! }
 do $system.OBJ.LoadStream(r.HttpResponse.Data,"c")
+write "Installing swagger-ui...",!
 zpm "install swagger-ui"
+
+write !,"Installing HealthShare Foundation namespace 'demo'...",!
 set $NAMESPACE = "HSLIB"
-do:'##class(%SYS.Namespace).Exists("demo") ##class(HS.Util.Installer.Foundation).Install("demo")
+write "Current namespace: ",$NAMESPACE,!
+
+if '##class(%SYS.Namespace).Exists("demo") {
+    write "Creating demo namespace via Foundation installer...",!
+    set sc = ##class(HS.Util.Installer.Foundation).Install("demo")
+    if $$$ISERR(sc) {
+        write "ERROR creating demo namespace: ",$system.Status.GetErrorText(sc),!
+    } else {
+        write "Demo namespace created successfully",!
+    }
+} else {
+    write "Demo namespace already exists",!
+}
+
+write !,"Switching to demo namespace...",!
 set $NAMESPACE = "demo"
+write "Current namespace: ",$NAMESPACE,!
+
+write !,"Setting up FHIR Server...",!
 set appKey= "/csp/healthshare/demo/fhir/r4"
 set strategyClass = "HS.FHIRServer.Storage.Json.InteractionsStrategy"
 set metadataPackages = $LISTBUILD("hl7.fhir.r4.core@4.0.1","hl7.fhir.us.core@3.1.0")
-do ##class(HS.FHIRServer.Installer).InstallNamespace()
-do ##class(HS.FHIRServer.Installer).InstallInstance(appKey, strategyClass, metadataPackages)
+
+write "Installing FHIR namespace components...",!
+set sc = ##class(HS.FHIRServer.Installer).InstallNamespace()
+if $$$ISERR(sc) { write "ERROR InstallNamespace: ",$system.Status.GetErrorText(sc),! } else { write "InstallNamespace OK",! }
+
+write "Installing FHIR instance at: ",appKey,!
+set sc = ##class(HS.FHIRServer.Installer).InstallInstance(appKey, strategyClass, metadataPackages)
+if $$$ISERR(sc) { write "ERROR InstallInstance: ",$system.Status.GetErrorText(sc),! } else { write "InstallInstance OK",! }
+
+write "Configuring FHIR search parameters...",!
 set strategy = ##class(HS.FHIRServer.API.InteractionsStrategy).GetStrategyForEndpoint(appKey)
 set configData = strategy.GetServiceConfigData()
 set configData.DefaultSearchPageSize = 1000
 set configData.MaxSearchPageSize = 10000
 set configData.MaxSearchResults = 10000
 do strategy.SaveServiceConfigData(configData)
+write "Search parameters configured",!
+
+write "Loading sample FHIR data from /fhirdata/...",!
 set sampledir = "/fhirdata/"
-do ##class(HS.FHIRServer.Tools.DataLoader).SubmitResourceFiles(sampledir, "FHIRServer", appKey, 0, "^fhirlogs")
+set sc = ##class(HS.FHIRServer.Tools.DataLoader).SubmitResourceFiles(sampledir, "FHIRServer", appKey, 0, "^fhirlogs")
+if $$$ISERR(sc) { write "WARNING loading sample data: ",$system.Status.GetErrorText(sc),! } else { write "Sample data loaded",! }
+
+write "Creating FHIRSQL web apps...",!
 set $NAMESPACE = "HSSYS"
 do ##class(HS.HC.FHIRSQL.Utils.Setup).CreateWebApps("HSSYS",1)
 set $NAMESPACE = "demo"
+write "FHIRSQL web apps created",!
+
+write !,"========================================",!
+write "FHIR Server Installation Complete!",!
+write "Endpoint: ",appKey,!
+write "========================================",!
+
+; ==============================================================================
+; MIMIC-CXR Vector Search Table Setup (Feature 009)
+; Creates VectorSearch.MIMICCXRImages table for storing chest X-ray embeddings
+; ==============================================================================
+
+; Create VectorSearch schema if it doesn't exist
+do $SYSTEM.SQL.Execute("CREATE SCHEMA IF NOT EXISTS VectorSearch")
+
+; Create MIMICCXRImages table for storing NV-CLIP embeddings
+; Uses VECTOR(DOUBLE, 1024) to match NV-CLIP output dimensions
+do $SYSTEM.SQL.Execute("CREATE TABLE IF NOT EXISTS VectorSearch.MIMICCXRImages ("_
+    "ImageID VARCHAR(128) NOT NULL PRIMARY KEY, "_
+    "SubjectID VARCHAR(20) NOT NULL, "_
+    "StudyID VARCHAR(20) NOT NULL, "_
+    "DicomID VARCHAR(128), "_
+    "ImagePath VARCHAR(500) NOT NULL, "_
+    "ViewPosition VARCHAR(20), "_
+    "Vector VECTOR(DOUBLE, 1024) NOT NULL, "_
+    "EmbeddingModel VARCHAR(50) DEFAULT 'nvidia/nvclip', "_
+    "Provider VARCHAR(50) DEFAULT 'nvclip', "_
+    "FHIRResourceID VARCHAR(100), "_
+    "CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "_
+    "UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP"_
+")")
+
+; Create indexes for common query patterns
+do $SYSTEM.SQL.Execute("CREATE INDEX IF NOT EXISTS idx_mimiccxr_subject ON VectorSearch.MIMICCXRImages(SubjectID)")
+do $SYSTEM.SQL.Execute("CREATE INDEX IF NOT EXISTS idx_mimiccxr_study ON VectorSearch.MIMICCXRImages(StudyID)")
+do $SYSTEM.SQL.Execute("CREATE INDEX IF NOT EXISTS idx_mimiccxr_view ON VectorSearch.MIMICCXRImages(ViewPosition)")
+do $SYSTEM.SQL.Execute("CREATE INDEX IF NOT EXISTS idx_mimiccxr_fhir ON VectorSearch.MIMICCXRImages(FHIRResourceID)")
+
+write !,"VectorSearch.MIMICCXRImages table created successfully",!
+
 halt
