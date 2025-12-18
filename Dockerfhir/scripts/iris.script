@@ -74,6 +74,32 @@ write "Endpoint: ",appKey,!
 write "========================================",!
 
 ; ==============================================================================
+; Enable unauthenticated FHIR access (POST/PUT/DELETE)
+; ==============================================================================
+write !,"Configuring FHIR CSP application for unauthenticated access...",!
+set $NAMESPACE = "%SYS"
+set appName = "/csp/healthshare/demo/fhir/r4"
+if ##class(Security.Applications).Exists(appName) {
+    set sc = ##class(Security.Applications).Get(appName, .props)
+    if $$$ISOK(sc) {
+        ; Set AutheEnabled: 64 (Unauthenticated) + 32 (Password) = 96
+        set props("AutheEnabled") = 96
+        set props("MatchRoles") = ":%All"
+        set sc = ##class(Security.Applications).Modify(appName, .props)
+        if $$$ISOK(sc) {
+            write "FHIR CSP application configured for unauthenticated access",!
+        } else {
+            write "WARNING: Failed to modify CSP app: ",$system.Status.GetErrorText(sc),!
+        }
+    } else {
+        write "WARNING: Failed to get CSP app: ",$system.Status.GetErrorText(sc),!
+    }
+} else {
+    write "WARNING: CSP application not found: ",appName,!
+}
+set $NAMESPACE = "demo"
+
+; ==============================================================================
 ; MIMIC-CXR Vector Search Table Setup (Feature 009)
 ; Creates VectorSearch.MIMICCXRImages table for storing chest X-ray embeddings
 ; ==============================================================================
