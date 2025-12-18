@@ -79,24 +79,15 @@ write "========================================",!
 write !,"Configuring FHIR CSP application for unauthenticated access...",!
 set $NAMESPACE = "%SYS"
 set appName = "/csp/healthshare/demo/fhir/r4"
-if ##class(Security.Applications).Exists(appName) {
-    set sc = ##class(Security.Applications).Get(appName, .props)
-    if sc {
-        ; Set AutheEnabled: 64 (Unauthenticated) + 32 (Password) = 96
-        set props("AutheEnabled") = 96
-        set props("MatchRoles") = ":%All"
-        set sc = ##class(Security.Applications).Modify(appName, .props)
-        if sc {
-            write "FHIR CSP application configured for unauthenticated access",!
-        } else {
-            write "WARNING: Failed to modify CSP app: ",$system.Status.GetErrorText(sc),!
-        }
-    } else {
-        write "WARNING: Failed to get CSP app: ",$system.Status.GetErrorText(sc),!
-    }
-} else {
-    write "WARNING: CSP application not found: ",appName,!
-}
+if '##class(Security.Applications).Exists(appName) write "WARNING: CSP app not found: ",appName,! goto EndCSPConfig
+set sc = ##class(Security.Applications).Get(appName, .props)
+if 'sc write "WARNING: Failed to get CSP app",! goto EndCSPConfig
+set props("AutheEnabled") = 96
+set props("MatchRoles") = ":%All"
+set sc = ##class(Security.Applications).Modify(appName, .props)
+if sc write "FHIR CSP application configured for unauthenticated access",!
+if 'sc write "WARNING: Failed to modify CSP app",!
+EndCSPConfig
 set $NAMESPACE = "demo"
 
 ; ==============================================================================
