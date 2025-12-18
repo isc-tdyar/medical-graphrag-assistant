@@ -12,6 +12,8 @@ services:
       - "32782:1972"   # IRIS SuperServer port
     volumes:
       - fhir-data:/durable
+      # Optional: Mount MIMIC-CXR sample data for development
+      # - /path/to/mimic-cxr-sample:/mimic-data:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:52773/fhir/r4/metadata | head -1 || exit 1"]
       interval: 30s

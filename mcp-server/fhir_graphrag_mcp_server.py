@@ -316,20 +316,33 @@ async def list_tools() -> List[Tool]:
         ),
         Tool(
             name="search_medical_images",
-            description="Search for medical images (X-rays) using text query or metadata. "
-                       "Uses NV-CLIP for semantic search (e.g., 'pneumonia', 'lateral view') "
-                       "to find relevant chest X-rays from MIMIC-CXR dataset.",
+            description="Search for chest X-ray images using semantic similarity via NV-CLIP embeddings. "
+                       "Searches VectorSearch.MIMICCXRImages table. Supports text queries (e.g., 'pneumonia', "
+                       "'bilateral infiltrates') and optional patient/view filters for hybrid FHIR+vector queries.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Search query (e.g., 'chest X-ray of pneumonia', 'enlarged heart')"
+                        "description": "Text description of the image pattern to search for (e.g., 'chest X-ray with bilateral infiltrates')"
+                    },
+                    "patient_id": {
+                        "type": "string",
+                        "description": "Optional MIMIC-CXR SubjectID to filter results (e.g., 'p10000032')"
+                    },
+                    "view_position": {
+                        "type": "string",
+                        "description": "Optional filter by radiographic view: PA, AP, LATERAL, LL, SWIMMERS"
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Maximum number of images to return",
-                        "default": 5
+                        "description": "Maximum number of results to return (1-50)",
+                        "default": 10
+                    },
+                    "min_similarity": {
+                        "type": "number",
+                        "description": "Minimum cosine similarity threshold (0.0-1.0)",
+                        "default": 0.5
                     }
                 },
                 "required": ["query"]
@@ -1403,8 +1416,10 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
 
         elif name == "search_medical_images":
             query = arguments["query"]
-            limit = arguments.get("limit", 5)
-            min_score = arguments.get("min_score", 0.0)  # New: score threshold filter
+            limit = min(arguments.get("limit", 10), 50)  # Cap at 50 per contract
+            min_score = arguments.get("min_similarity", 0.5)  # Default 0.5 per contract
+            patient_id = arguments.get("patient_id")  # Optional SubjectID filter (T014)
+            view_position = arguments.get("view_position")  # Optional view filter (T015)
 
             emb = get_embedder()
             results = []
@@ -1419,12 +1434,28 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     query_vector_tuple = get_cached_embedding(query)
                     query_vector = list(query_vector_tuple)  # Convert tuple back to list
                     vector_str = ','.join(map(str, query_vector))
-                    
+
                     # Check if this was a cache hit
                     info = cache_info()
                     cache_hit = info.hits > 0
-                    
+
                     search_mode = "semantic"
+
+                    # Build WHERE clause for optional filters (T014, T015)
+                    where_conditions = []
+                    params = [limit, vector_str]
+
+                    if patient_id:
+                        where_conditions.append("i.SubjectID = ?")
+                        params.append(patient_id)
+
+                    if view_position:
+                        where_conditions.append("i.ViewPosition = ?")
+                        params.append(view_position.upper())
+
+                    where_clause = ""
+                    if where_conditions:
+                        where_clause = "WHERE " + " AND ".join(where_conditions)
 
                     # Updated SQL: Include similarity score and patient info via LEFT JOIN (T013-T016)
                     sql = f"""
@@ -1435,9 +1466,10 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                         FROM VectorSearch.MIMICCXRImages i
                         LEFT JOIN VectorSearch.PatientImageMapping m
                             ON i.SubjectID = m.MIMICSubjectID
+                        {where_clause}
                         ORDER BY Similarity DESC
                     """
-                    cursor.execute(sql, (limit, vector_str))
+                    cursor.execute(sql, params)
                 except Exception as e:
                     # Enhanced error handling (T018)
                     print(f"Error in vector search: {e}", file=sys.stderr)

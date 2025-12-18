@@ -1,0 +1,153 @@
+# MCP Tool Contract: search_medical_images
+# Version: 1.0.0
+# Date: 2025-12-18
+
+openapi: 3.0.3
+info:
+  title: Medical Image Search MCP Tool
+  description: Semantic similarity search on MIMIC-CXR chest X-ray images using NV-CLIP embeddings
+  version: 1.0.0
+
+paths:
+  /tools/search_medical_images:
+    post:
+      summary: Search for similar medical images
+      description: |
+        Performs semantic similarity search on chest X-ray images in VectorSearch.MIMICCXRImages.
+        Supports text queries (e.g., "pneumonia pattern") and optional patient filtering.
+      operationId: search_medical_images
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        '200':
+          description: Successful search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '503':
+          description: Service unavailable (NV-CLIP or IRIS down)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    SearchRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: Text description of the image pattern to search for
+          example: "chest X-ray with bilateral infiltrates"
+        patient_id:
+          type: string
+          description: Optional MIMIC-CXR SubjectID to filter results (e.g., p10000032)
+          pattern: "^p[0-9]+$"
+          example: "p10000032"
+        view_position:
+          type: string
+          enum: [PA, AP, LATERAL, LL, SWIMMERS]
+          description: Optional filter by radiographic view
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+          description: Maximum number of results to return
+        min_similarity:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          default: 0.5
+          description: Minimum cosine similarity threshold
+
+    SearchResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, partial, error]
+        query:
+          type: string
+          description: Original search query
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImageResult'
+        total_found:
+          type: integer
+          description: Total matching images (may exceed limit)
+        execution_time_ms:
+          type: number
+          description: Query execution time in milliseconds
+
+    ImageResult:
+      type: object
+      properties:
+        image_id:
+          type: string
+          description: DICOM SOP Instance UID
+        subject_id:
+          type: string
+          description: MIMIC-CXR patient identifier
+        study_id:
+          type: string
+          description: MIMIC-CXR study identifier
+        view_position:
+          type: string
+          description: Radiographic view (PA, AP, etc.)
+        similarity:
+          type: number
+          description: Cosine similarity score (0.0 to 1.0)
+        fhir_resource_id:
+          type: string
+          nullable: true
+          description: Linked FHIR ImagingStudy reference
+        image_path:
+          type: string
+          description: Original file path (for debugging)
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error, unavailable]
+        message:
+          type: string
+          description: Human-readable error message
+        suggestion:
+          type: string
+          description: Recommended action to resolve the error
+
+# MCP Tool Definition (for mcp-server registration)
+x-mcp-tool:
+  name: search_medical_images
+  description: |
+    Search for chest X-ray images similar to a text description using NV-CLIP embeddings.
+    Supports patient filtering for hybrid FHIR+vector queries.
+  inputSchema:
+    type: object
+    required:
+      - query
+    properties:
+      query:
+        type: string
+        description: Text description of the image pattern
+      patient_id:
+        type: string
+        description: Optional patient filter (SubjectID)
+      view_position:
+        type: string
+        description: Optional view filter (PA, AP, LATERAL)
+      limit:
+        type: integer
+        description: Max results (default 10)

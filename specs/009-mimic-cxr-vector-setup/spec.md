@@ -25,7 +25,7 @@ When deploying the medical-graphrag-assistant system (via Docker container start
 
 ### User Story 2 - Batch Image Ingestion Script (Priority: P2)
 
-A Python script that processes MIMIC-CXR DICOM files, generates NV-CLIP embeddings via the embedding service, and inserts records into the VectorSearch.MIMICCXRImages table. Supports batch processing with progress reporting and error recovery.
+A Python script that processes MIMIC-CXR DICOM files from a user-provided local directory path, generates NV-CLIP embeddings via the embedding service, and inserts records into the VectorSearch.MIMICCXRImages table. Supports batch processing with progress reporting and error recovery. Users must obtain MIMIC-CXR data separately (PhysioNet credentialed access required for the full dataset).
 
 **Why this priority**: Once the table exists, we need a way to populate it with actual medical image vectors. This enables the semantic search functionality.
 
@@ -104,7 +104,7 @@ When images are ingested into the vector table, corresponding FHIR ImagingStudy 
   - Script should retry connection 3 times with exponential backoff, then fail with connection details
 
 - What happens with very large DICOM files (>100MB)?
-  - Should log warning and skip, or process with memory limits
+  - Skip with warning (files >100MB are typically CT/MRI volumes, not CXR)
 
 - What happens when disk space is insufficient for batch processing?
   - Check available space before starting, warn if <1GB available
@@ -171,6 +171,13 @@ When images are ingested into the vector table, corresponding FHIR ImagingStudy 
   - Series containing image references
   - Modality: DX (Digital Radiography)
   - BodySite: Chest
+
+## Clarifications
+
+### Session 2025-12-18
+
+- Q: Where does the MIMIC-CXR image data come from for ingestion? → A: Local directory path (user-provided via `--source` flag)
+- Q: How should large DICOM files (>100MB) be handled? → A: Skip with warning (files >100MB are typically CT/MRI volumes, not CXR)
 
 ## Success Criteria *(mandatory)*
 

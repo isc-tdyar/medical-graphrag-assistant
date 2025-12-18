@@ -81,12 +81,12 @@ set $NAMESPACE = "%SYS"
 set appName = "/csp/healthshare/demo/fhir/r4"
 if ##class(Security.Applications).Exists(appName) {
     set sc = ##class(Security.Applications).Get(appName, .props)
-    if $$$ISOK(sc) {
+    if sc {
         ; Set AutheEnabled: 64 (Unauthenticated) + 32 (Password) = 96
         set props("AutheEnabled") = 96
         set props("MatchRoles") = ":%All"
         set sc = ##class(Security.Applications).Modify(appName, .props)
-        if $$$ISOK(sc) {
+        if sc {
             write "FHIR CSP application configured for unauthenticated access",!
         } else {
             write "WARNING: Failed to modify CSP app: ",$system.Status.GetErrorText(sc),!

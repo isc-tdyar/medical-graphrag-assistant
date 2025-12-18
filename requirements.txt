@@ -35,3 +35,7 @@ streamlit-agraph
 pytest
 pytest-cov
 pytest-asyncio
+
+# MIMIC-CXR Vector Search (009)
+pydicom  # DICOM file parsing for medical images
+requests  # HTTP client for NV-CLIP API calls

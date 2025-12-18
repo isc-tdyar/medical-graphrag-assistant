@@ -12,12 +12,15 @@ Environment Variables:
     IRIS_HOST       IRIS database host (default: localhost)
     IRIS_PORT       IRIS SuperServer port (default: 32782)
     FHIR_BASE_URL   FHIR API endpoint (default: http://localhost:32783/csp/healthshare/demo/fhir/r4)
+    FHIR_USERNAME   FHIR server username (default: _SYSTEM)
+    FHIR_PASSWORD   FHIR server password (default: sys)
 """
 
 import os
 import sys
 import json
 import requests
+from requests.auth import HTTPBasicAuth
 from typing import List, Dict, Optional
 
 # Add project root to path
@@ -148,11 +151,14 @@ def main():
         "FHIR_BASE_URL",
         "http://localhost:32783/csp/healthshare/demo/fhir/r4"
     )
+    fhir_username = os.environ.get("FHIR_USERNAME", "_SYSTEM")
+    fhir_password = os.environ.get("FHIR_PASSWORD", "sys")
 
     print("=" * 60)
     print("FHIR Patient Population from MIMIC-CXR Subjects")
     print("=" * 60)
     print(f"FHIR Base URL: {fhir_base_url}")
+    print(f"FHIR Auth: {fhir_username}:****")
     print()
 
     # Get unique subjects from database
@@ -165,8 +171,9 @@ def main():
         print("No subjects found. Please run the MIMIC-CXR ingestion first.")
         return
 
-    # Test FHIR connection
+    # Test FHIR connection with basic auth
     session = requests.Session()
+    session.auth = HTTPBasicAuth(fhir_username, fhir_password)
     print("Testing FHIR connection...")
     try:
         response = session.get(f"{fhir_base_url}/metadata", timeout=10)
