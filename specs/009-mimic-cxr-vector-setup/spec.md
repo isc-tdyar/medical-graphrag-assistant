@@ -17,7 +17,7 @@ When deploying the medical-graphrag-assistant system (via Docker container start
 
 **Acceptance Scenarios**:
 
-1. **Given** a fresh IRIS container with no VectorSearch schema, **When** the container starts and runs initialization scripts, **Then** the VectorSearch.MIMICCXRImages table exists with correct schema (columns: ImageID, SubjectID, StudyID, DicomID, ImagePath, ViewPosition, Vector, EmbeddingModel, Provider, CreatedAt)
+1. **Given** a fresh IRIS container with no VectorSearch schema, **When** the container starts and runs initialization scripts, **Then** the VectorSearch.MIMICCXRImages table exists with correct schema (columns: ImageID, SubjectID, StudyID, DicomID, ImagePath, ViewPosition, Vector, EmbeddingModel, Provider, FHIRResourceID, CreatedAt)
 
 2. **Given** an existing IRIS container with the table already created, **When** the initialization script runs again, **Then** the script skips creation (idempotent) and preserves existing data
 
@@ -57,6 +57,44 @@ The table creation SQL and sample data population are integrated into the Docker
 
 ---
 
+### User Story 4 - FHIR-Integrated Hybrid Search (Priority: P1)
+
+MCP tools can perform hybrid searches combining FHIR query syntax (patient filters, date ranges, encounter context) with vector similarity search. Images in VectorSearch.MIMICCXRImages are linked to FHIR ImagingStudy/DiagnosticReport resources via SubjectID mapping.
+
+**Why this priority**: The core value proposition of this system is combining structured FHIR data with semantic image search. Without FHIR integration, the image search operates in isolation from patient context.
+
+**Independent Test**: Query for "find chest X-rays similar to pneumonia for patient X" where X is a known patient in the FHIR repository. Verify results are filtered to that patient's images only.
+
+**Acceptance Scenarios**:
+
+1. **Given** a patient with SubjectID "p10000032" exists in FHIR and has images in VectorSearch.MIMICCXRImages, **When** calling `search_medical_images` with query "pneumonia" and patient_id filter, **Then** only images belonging to that patient are returned with similarity scores
+
+2. **Given** FHIR ImagingStudy resources exist with references to image paths, **When** the ingestion script processes images, **Then** it creates/updates FHIR ImagingStudy resources to maintain bidirectional linkage
+
+3. **Given** a hybrid search MCP tool, **When** called with FHIR filters (patient, date range, view position) and semantic query "consolidation pattern", **Then** SQL query combines FHIR patient lookup with vector cosine similarity in a single efficient query
+
+4. **Given** FHIR DiagnosticReport resources exist with impression text, **When** performing hybrid search, **Then** the system can optionally include DiagnosticReport content in relevance ranking
+
+---
+
+### User Story 5 - FHIR Resource Creation on Image Ingestion (Priority: P2)
+
+When images are ingested into the vector table, corresponding FHIR ImagingStudy resources are created or updated in the FHIR repository, ensuring every image is discoverable via standard FHIR queries.
+
+**Why this priority**: Enables FHIR-first workflows where clinicians discover images through FHIR APIs, then use vector search for similarity analysis. Also ensures compliance with healthcare data standards.
+
+**Independent Test**: Ingest 10 images, then query FHIR `/ImagingStudy?subject=Patient/X` and verify ImagingStudy resources exist with correct references.
+
+**Acceptance Scenarios**:
+
+1. **Given** a DICOM image with SubjectID "p10000032" is ingested, **When** ingestion completes, **Then** a FHIR ImagingStudy resource exists with subject reference to the corresponding Patient
+
+2. **Given** MIMIC-CXR metadata CSV contains study-level information (AccessionNumber, StudyDate), **When** creating ImagingStudy resources, **Then** metadata is mapped to appropriate FHIR fields
+
+3. **Given** an image already has a corresponding ImagingStudy, **When** re-ingesting the same image, **Then** the existing ImagingStudy is not duplicated (idempotent)
+
+---
+
 ### Edge Cases
 
 - What happens when NV-CLIP embedding service is unavailable during ingestion?
@@ -70,6 +108,18 @@ The table creation SQL and sample data population are integrated into the Docker
 
 - What happens when disk space is insufficient for batch processing?
   - Check available space before starting, warn if <1GB available
+
+- What happens when SubjectID in MIMIC-CXR doesn't match any FHIR Patient?
+  - Log warning, store image anyway with SubjectID; FHIR linkage is best-effort
+
+- What happens when FHIR server is unavailable during FHIR resource creation?
+  - Retry 3 times, then continue with vector insertion only; mark for FHIR sync later
+
+- What happens when performing hybrid search with invalid patient_id filter?
+  - Return empty results with warning message, not an error
+
+- What happens when vector table has images but no FHIR ImagingStudy exists?
+  - Hybrid search degrades gracefully to vector-only search with warning
 
 ## Requirements *(mandatory)*
 
@@ -86,22 +136,41 @@ The table creation SQL and sample data population are integrated into the Docker
 - **FR-009**: System MUST store 1024-dimensional vectors from NV-CLIP embeddings
 - **FR-010**: Each image record MUST include SubjectID, StudyID, ImageID, ViewPosition, and ImagePath
 
+### FHIR Integration Requirements
+
+- **FR-011**: MCP tool `search_medical_images` MUST accept optional `patient_id` parameter to filter results
+- **FR-012**: Hybrid search MUST support combining FHIR patient context with vector similarity in single SQL query
+- **FR-013**: System SHOULD create FHIR ImagingStudy resources when ingesting new images (best-effort)
+- **FR-014**: ImagingStudy resources MUST include subject reference linking to FHIR Patient
+- **FR-015**: Ingestion script MUST support `--create-fhir-resources` flag to enable FHIR resource creation
+- **FR-016**: Hybrid search results MUST return both similarity score and FHIR resource references
+- **FR-017**: System MUST support querying images by FHIR reference (e.g., ImagingStudy/123)
+- **FR-018**: Vector search combined with FHIR filters MUST complete in < 1 second for typical queries
+
 ### Key Entities
 
 - **MIMICCXRImage**: A chest X-ray image record with vector embedding
   - ImageID (PK): Unique DICOM identifier
-  - SubjectID: Patient identifier (anonymized)
+  - SubjectID: Patient identifier (maps to FHIR Patient)
   - StudyID: Study/session identifier
   - ViewPosition: PA, AP, LATERAL, LL, SWIMMERS
   - Vector: 1024-dimensional NV-CLIP embedding
   - EmbeddingModel: 'nvidia/nvclip'
   - Provider: 'nvclip'
+  - FHIRResourceID: Reference to FHIR ImagingStudy (e.g., "ImagingStudy/123")
 
 - **IngestionJob**: Represents a batch processing run
   - Source directory
   - Total files found
   - Files processed/skipped/failed
   - Start/end timestamps
+
+- **FHIRImagingStudy**: FHIR resource linking to vector table records
+  - Subject reference (Patient)
+  - Identifier (StudyID)
+  - Series containing image references
+  - Modality: DX (Digital Radiography)
+  - BodySite: Chest
 
 ## Success Criteria *(mandatory)*
 
@@ -112,3 +181,10 @@ The table creation SQL and sample data population are integrated into the Docker
 - **SC-003**: After ingestion, `medical_image_search` tool returns results with similarity scores for any text query
 - **SC-004**: Table supports at least 100,000 image records without performance degradation on vector search (< 500ms query time)
 - **SC-005**: System handles re-runs gracefully - no duplicate records, no data loss
+
+### FHIR Integration Success Criteria
+
+- **SC-006**: Hybrid query `search_medical_images(query="pneumonia", patient_id="p10000032")` returns only that patient's images in < 1 second
+- **SC-007**: After ingesting 100 images with `--create-fhir-resources`, at least 90 corresponding ImagingStudy resources exist in FHIR
+- **SC-008**: FHIR query `/ImagingStudy?subject=Patient/X` returns studies with proper references to vector table
+- **SC-009**: MCP tool can perform combined query: "Find pneumonia-like images for patients with diabetes" using FHIR Condition + vector search
