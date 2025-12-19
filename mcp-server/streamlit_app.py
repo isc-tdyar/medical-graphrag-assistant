@@ -1970,6 +1970,13 @@ def chat_with_tools(user_message: str):
                     if 'text' in block:
                         final_text += block['text']
 
+                # Strip markdown image syntax to prevent broken placeholder images
+                # Claude sometimes generates ![alt](url) with fake placeholder URLs
+                import re
+                final_text = re.sub(r'!\[.*?\]\(.*?\)', '', final_text)
+                # Clean up any double newlines left behind
+                final_text = re.sub(r'\n{3,}', '\n\n', final_text)
+
                 with text_container:
                     st.write(final_text)
 
