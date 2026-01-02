@@ -22,6 +22,8 @@ def pytest_html_report_title(report):
 
 @pytest.fixture(scope="function", autouse=True)
 def handle_login(page, target_url):
+    page.set_viewport_size({"width": 1280, "height": 1024})
+    
     test_password = os.getenv("TEST_PASSWORD")
     page.goto(target_url)
     

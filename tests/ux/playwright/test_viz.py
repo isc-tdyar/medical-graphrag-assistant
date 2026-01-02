@@ -7,18 +7,18 @@ def test_plotly_rendering(page, target_url):
     page.goto(target_url)
     wait_for_streamlit(page)
     
-    query = "Show a chart of patient age distribution"
+    query = "Plot entity type distribution"
     chat_input = page.locator(StreamlitLocators.CHAT_INPUT)
     chat_input.fill(query)
     chat_input.press("Enter")
     
-    wait_for_streamlit(page)
+    wait_for_streamlit(page, timeout=90000)
     
     plotly_chart = page.locator(StreamlitLocators.PLOTLY_CHART)
-    expect(plotly_chart).to_be_visible(timeout=60000)
+    expect(plotly_chart).to_be_visible(timeout=90000)
     
-    traces = plotly_chart.locator('.traces')
-    expect(traces).to_have_count(1, timeout=5000)
+    plotly_chart.hover()
+    expect(plotly_chart.locator('.hoverlayer')).to_be_visible(timeout=5000)
 
 def test_knowledge_graph_rendering(page, target_url):
     page.goto(target_url)

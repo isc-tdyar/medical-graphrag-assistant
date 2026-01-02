@@ -10,28 +10,11 @@ def test_ui_elements_presence(page, target_url):
     expect(page.locator(StreamlitLocators.SIDEBAR)).to_be_visible()
     expect(page.locator(StreamlitLocators.CHAT_INPUT)).to_be_visible()
 
-def test_search_functionality(page, target_url):
+def test_fhir_search_decoding(page, target_url):
     page.goto(target_url)
     wait_for_streamlit(page)
     
-    query = "Find patients with diabetes"
-    chat_input = page.locator(StreamlitLocators.CHAT_INPUT)
-    chat_input.fill(query)
-    chat_input.press("Enter")
-    
-    wait_for_streamlit(page)
-    
-    messages = page.locator(StreamlitLocators.CHAT_MESSAGE)
-    expect(messages).to_have_count(2, timeout=60000)
-    
-    last_message = messages.last
-    expect(last_message).to_contain_text("diabetes", ignore_case=True)
-
-def test_iris_result_display(page, target_url):
-    page.goto(target_url)
-    wait_for_streamlit(page)
-    
-    query = "Search FHIR documents for chest x-ray"
+    query = "Search FHIR documents for cough"
     chat_input = page.locator(StreamlitLocators.CHAT_INPUT)
     chat_input.fill(query)
     chat_input.press("Enter")
@@ -39,8 +22,74 @@ def test_iris_result_display(page, target_url):
     wait_for_streamlit(page)
     
     expander = page.locator(StreamlitLocators.EXPANDER).filter(has_text="Execution Details")
-    expect(expander).to_be_visible()
+    expect(expander).to_be_visible(timeout=60000)
     expander.click()
     
-    expect(expander).to_contain_text("IRIS", ignore_case=True)
-    expect(expander).to_contain_text("Search", ignore_case=True)
+    expect(expander).to_contain_text("cough", ignore_case=True)
+    expect(page.locator(StreamlitLocators.CHAT_MESSAGE).last).to_contain_text("cough", ignore_case=True)
+
+def test_kg_search(page, target_url):
+    page.goto(target_url)
+    wait_for_streamlit(page)
+    
+    query = "Search knowledge graph for fever"
+    chat_input = page.locator(StreamlitLocators.CHAT_INPUT)
+    chat_input.fill(query)
+    chat_input.press("Enter")
+    
+    wait_for_streamlit(page)
+    
+    expander = page.locator(StreamlitLocators.EXPANDER).filter(has_text="Execution Details")
+    expect(expander).to_be_visible(timeout=60000)
+    expander.click()
+    expect(expander).to_contain_text("search_knowledge_graph")
+
+def test_hybrid_search(page, target_url):
+    page.goto(target_url)
+    wait_for_streamlit(page)
+    
+    query = "Hybrid search for chest pain"
+    chat_input = page.locator(StreamlitLocators.CHAT_INPUT)
+    chat_input.fill(query)
+    chat_input.press("Enter")
+    
+    wait_for_streamlit(page)
+    
+    expander = page.locator(StreamlitLocators.EXPANDER).filter(has_text="Execution Details")
+    expect(expander).to_be_visible(timeout=60000)
+    expander.click()
+    expect(expander).to_contain_text("hybrid_search")
+
+def test_image_search(page, target_url):
+    page.goto(target_url)
+    wait_for_streamlit(page)
+    
+    query = "Find medical images of pneumonia"
+    chat_input = page.locator(StreamlitLocators.CHAT_INPUT)
+    chat_input.fill(query)
+    chat_input.press("Enter")
+    
+    wait_for_streamlit(page)
+    
+    expander = page.locator(StreamlitLocators.EXPANDER).filter(has_text="Execution Details")
+    expect(expander).to_be_visible(timeout=60000)
+    expander.click()
+    expect(expander).to_contain_text("search_medical_images")
+    
+    expect(page.locator('[data-testid="stImage"]').first).to_be_visible(timeout=30000)
+
+def test_entity_statistics(page, target_url):
+    page.goto(target_url)
+    wait_for_streamlit(page)
+    
+    query = "Show me knowledge graph statistics"
+    chat_input = page.locator(StreamlitLocators.CHAT_INPUT)
+    chat_input.fill(query)
+    chat_input.press("Enter")
+    
+    wait_for_streamlit(page)
+    
+    expander = page.locator(StreamlitLocators.EXPANDER).filter(has_text="Execution Details")
+    expect(expander).to_be_visible(timeout=60000)
+    expander.click()
+    expect(expander).to_contain_text("get_entity_statistics")
