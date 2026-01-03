@@ -1,11 +1,11 @@
 # Medical GraphRAG Assistant - System Status
 
-**Last Updated**: December 17, 2025
-**Version**: v2.15.0
+**Last Updated**: January 02, 2026
+**Version**: v2.16.0
 
 ## System Health: ✅ OPERATIONAL
 
-All core systems are functioning and deployed to production.
+All core systems are functioning and verified on the target EC2 environment.
 
 ---
 
@@ -14,7 +14,7 @@ All core systems are functioning and deployed to production.
 ### Infrastructure
 - **Status**: ✅ Running
 - **Instance**: EC2 g5.xlarge (i-0432eba10b98c4949)
-- **Public IP**: 13.218.19.254
+- **Public IP**: 13.218.19.254 (Verified 2026-01-02)
 - **Region**: us-east-1
 - **GPU**: NVIDIA A10G (available)
 - **OS**: Ubuntu 24.04 LTS
@@ -144,7 +144,7 @@ export IRIS_USERNAME=_SYSTEM
 export IRIS_PASSWORD=***
 
 # NV-CLIP
-export NVCLIP_BASE_URL=http://localhost:8002/v1  # via SSH tunnel
+export NVCLIP_BASE_URL=http://localhost:8002/v1  # via SSH tunnel (IP: 13.218.19.254)
 ```
 
 ---
