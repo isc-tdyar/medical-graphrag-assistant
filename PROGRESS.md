@@ -1412,4 +1412,15 @@ Move caching to instance level for testability.
 ### Progress
 - ✅ **Phase 1: Setup** - Project structure and pytest-playwright configuration complete.
 - ✅ **Phase 2: Foundational** - Conditional login fixture and Streamlit utilities implemented.
-- 🏗️ **Phase 3: User Story 1** - Search verification tests in development.
+- ✅ **Phase 3: User Story 1** - Search verification tests complete.
+- ✅ **Phase 4: User Story 2** - Visualization verification tests complete.
+- ✅ **Phase 5: User Story 3** - Agent memory verification tests complete.
+- ✅ **Phase 6: User Story 4** - Radiology verification tests complete (identified missing tables).
+
+### 2026-01-02: Pragmatic Refactor & Health CLI - COMPLETE ✅
+- **Logic Decoupling**: Extracted core search and fusion logic from `fhir_graphrag_mcp_server.py` into `src/search/` service layer (FHIR, KG, Hybrid).
+- **System Health CLI**: Implemented `python -m src.cli check-health` to verify database connectivity, schema integrity, and GPU status.
+- **Environment Fix**: Added `fix-environment` command to CLI to automatically ensure required tables like `SQLUser.FHIRDocuments` exist.
+- **Testability**: Achieved direct Python-level verification of search logic without needing the MCP server or browser.
+- **Radiology Fix**: Updated setup scripts to ensure `SQLUser.FHIRDocuments` is correctly initialized with `TextContent` column for clinical note search.
+

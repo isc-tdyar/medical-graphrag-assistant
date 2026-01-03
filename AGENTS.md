@@ -43,14 +43,16 @@ medical-graphrag-assistant/
 ### 🛠️ Development & Execution
 - **Run Streamlit UI**: `cd mcp-server && streamlit run streamlit_app.py`
 - **Run MCP Server**: `python mcp-server/fhir_graphrag_mcp_server.py`
+- **System Health Check**: `python -m src.cli check-health --smoke-test`
+- **Fix Environment**: `python -m src.cli fix-environment`
 - **Linting**: `ruff check .` or `ruff check . --fix`
 - **Type Checking**: `mypy .` (if configured)
 
 ### 🧪 Testing
 - **Run all tests**: `pytest`
-- **Run unit tests**: `pytest tests/unit/`
-- **Run integration tests**: `pytest tests/integration/`
-- **Run E2E tests**: `pytest tests/e2e/`
+- **Search Services**: `pytest tests/unit/search/` (Verifies logic without MCP/UI)
+- **MCP Wrappers**: `pytest tests/unit/mcp/` (Verifies tool-to-service delegation)
+- **UX (Playwright)**: `pytest tests/ux/playwright/` (Requires TARGET_URL)
 - **Run a single test file**: `pytest tests/unit/search/test_hybrid_search.py`
 - **Run a specific test function**: `pytest tests/unit/search/test_hybrid_search.py::test_rrf_fusion`
 
@@ -59,6 +61,7 @@ medical-graphrag-assistant/
 ## 🎨 Code Style & Conventions
 
 ### 🐍 Python Guidelines
+- **Service Layer**: Business logic (SQL, fusion, graph traversal) MUST reside in `src/search/` services. The MCP server SHOULD only contain tool definitions and input validation, delegating execution to services.
 - **Naming**: 
     - Variables/Functions/Methods: `snake_case` (e.g., `get_patient_records`)
     - Classes: `PascalCase` (e.g., `GraphRAGManager`)
@@ -83,9 +86,9 @@ medical-graphrag-assistant/
 - **Native API**: Use `src.db.connection.get_connection()` for IRIS DBAPI access.
 - **Vector Search**: Use `VECTOR_COSINE` for similarity queries.
 - **SQL Schema**: 
-    - `SQLUser`: General FHIR resources and Knowledge Graph tables.
+    - `SQLUser`: General FHIR resources, Knowledge Graph tables, and migrated documents.
     - `VectorSearch`: Vector-enabled tables for images and memory.
-- **Parametrization**: ALWAYS use `?` placeholders in SQL queries to prevent injection. Never use f-strings to build SQL queries with user input.
+- **Parametrization**: ALWAYS use `?` placeholders in SQL queries to prevent injection (Principle I). Never use f-strings to build SQL queries with user input.
 
 ### 📦 IRIS Vector Packages
 This project leverages the following InterSystems IRIS Vector packages for RAG and Graph workloads:
@@ -99,7 +102,7 @@ This project leverages the following InterSystems IRIS Vector packages for RAG a
 ### 🤖 Model Context Protocol (MCP)
 - The core logic is exposed via an MCP server in `mcp-server/fhir_graphrag_mcp_server.py`.
 - **Tool Definition**: Tools are defined in the `list_tools` handler. Each tool must have a clear description and a strictly defined `inputSchema`.
-- **Tool Execution**: Implementation resides in the `call_tool` handler. 
+- **Service Delegation**: Implementation resides in `src/search/` services. The `call_tool` handler should be a thin wrapper. 
 - **Response Format**: Tools should return a `List[TextContent]` where the text is a JSON-formatted string.
 
 ### 🧠 GraphRAG & RRF
