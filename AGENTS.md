@@ -32,6 +32,7 @@ medical-graphrag-assistant/
 - **AWS Profile**: Use `PowerUserPlusAccess-122293094970` for all AWS operations.
 - **AWS Login**: `aws sso login --profile PowerUserPlusAccess-122293094970`
 - **Environment Variables**: Required keys: `AWS_PROFILE`, `IRIS_HOST`, `IRIS_PORT`, `IRIS_NAMESPACE`, `IRIS_USERNAME`, `IRIS_PASSWORD`, `NVCLIP_BASE_URL`, `NVIDIA_API_KEY`.
+- **Python Driver**: ALWAYS use `intersystems-irispython` (NOT `iris` or `intersystems-iris`).
 
 ### 🖥️ EC2 Environment
 - **Instance Name**: `fhir-ai-hackathon`
@@ -175,9 +176,9 @@ This project optimizes for cost and performance using model tiering:
 8. **Documentation**: Keep `STATUS.md` and `PROGRESS.md` updated as you complete major features or milestones.
 
 ## Recent Changes
-- 009-full-ux-tests: Added Python 3.11 + Playwright, pytest, pytest-playwright, requests, intersystems-iris
+- 009-full-ux-tests: Added Python 3.11 + Playwright, pytest, pytest-playwright, requests, intersystems-irispython
 - 009-full-ux-tests: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 
 ## Active Technologies
-- Python 3.11 + Playwright, pytest, pytest-playwright, requests, intersystems-iris (009-full-ux-tests)
+- Python 3.11 + Playwright, pytest, pytest-playwright, requests, intersystems-irispython (009-full-ux-tests)
 - InterSystems IRIS (Target environment validation) (009-full-ux-tests)

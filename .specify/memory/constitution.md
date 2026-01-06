@@ -3,7 +3,7 @@
 ## Core Principles
 
 ### I. IRIS-Native
-The system MUST prioritize InterSystems IRIS native features (SQL, Vector Search, Graph traversals) over external logic. Database logic MUST be parameterized to prevent injection.
+The system MUST prioritize InterSystems IRIS native features (SQL, Vector Search, Graph traversals) over external logic. Database logic MUST be parameterized to prevent injection. The project MUST use `intersystems-irispython` as the official Python driver (not `iris` or `intersystems-iris`).
 
 ### II. Agent-Centric Design
 All features MUST be exposed via the Model Context Protocol (MCP) as tools. Tools MUST return structured JSON to ensure predictable LLM consumption.
