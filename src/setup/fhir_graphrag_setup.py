@@ -571,15 +571,6 @@ def main():
             setup.init_tables()
 
         elif args.mode == 'build':
-            # Check rag-templates availability
-            try:
-                from iris_rag import create_pipeline
-                print("[INFO] ✅ rag-templates library accessible")
-            except ImportError:
-                print("[ERROR] rag-templates library not found")
-                print(f"[ERROR] Please ensure {RAG_TEMPLATES_PATH} exists and is accessible")
-                sys.exit(1)
-
             setup.build_knowledge_graph()
 
         elif args.mode == 'sync':
