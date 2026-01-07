@@ -1460,7 +1460,7 @@ def render_chart(tool_name: str, data, unique_id: str = None):
                         else:
                             # Fallback if local path not found
                             st.warning(f"Image not found: {os.path.basename(img_path) if img_path else 'N/A'}")
-                            st.info(f"{study_type} - Patient {patient_id}")
+                            st.info(f"{study_type} - {patient_display}")
                     except Exception as e:
                         st.error(f"Error loading image: {e}")
             return True
@@ -1566,15 +1566,23 @@ def demo_mode_search(user_message: str):
 
         status.empty()
         response = f"**Search Results** (Demo Mode)\n\n"
-        response += f"- FHIR results: {data['fhir_results']}\n"
-        response += f"- GraphRAG results: {data['graphrag_results']}\n"
-        response += f"- Fused results: {data['fused_results']}\n\n"
+        
+        # Handle new service response format (v2.16.0)
+        if "results_count" in data:
+            response += f"- Total results: {data['results_count']}\n"
+            response += f"- Entities found: {data.get('entities_found', 0)}\n\n"
+        else:
+            # Legacy format support
+            response += f"- FHIR results: {data.get('fhir_results', 'N/A')}\n"
+            response += f"- GraphRAG results: {data.get('graphrag_results', 'N/A')}\n"
+            response += f"- Fused results: {data.get('fused_results', 'N/A')}\n\n"
 
-        if data['top_documents']:
+        if data.get('top_documents'):
             response += "**Top Documents:**\n"
             for doc in data['top_documents']:
-                sources = ", ".join(doc['sources'])
-                response += f"- Document {doc['fhir_id']} (score: {doc['rrf_score']:.4f}, sources: {sources})\n"
+                sources = ", ".join(doc.get('sources', []))
+                score = doc.get('rrf_score', 0.0)
+                response += f"- Document {doc['fhir_id']} (score: {score:.4f}, sources: {sources})\n"
 
         return response
 
