@@ -45,58 +45,31 @@ vector_storage:
   dimension: 1024                  # Legacy setting (CloudConfiguration uses storage.vector_dimension)
 
 # Knowledge Graph Storage (AWS tables)
-# Note: Using SQLUser schema with fully qualified names for AWS IRIS
 knowledge_graph:
-  entities_table: "SQLUser.Entities"
-  relationships_table: "SQLUser.EntityRelationships"
+  entities_table: "RAG.Entities"
+  relationships_table: "RAG.EntityRelationships"
+
+# Multimodal Embedding Configuration (NV-CLIP)
+nvclip:
+  base_url: "http://13.216.2.41:8002/v1" 
+  model: "nvidia/nvclip"
+  batch_size: 16
+  timeout: 60
 
 # Embedding Configuration (NVIDIA NIM)
 embeddings:
   model: "nvidia/nv-embedqa-e5-v5"  # NVIDIA NIM embedding model
+  base_url: "http://localhost:8001/v1"
   dimension: 1024                   # Legacy setting (CloudConfiguration uses storage.vector_dimension)
   batch_size: 32
   normalize: true
   device: "cuda"                    # Use GPU on EC2 g5.xlarge
 
-# GraphRAG Pipeline Configuration
-pipelines:
-  graphrag:
-    entity_extraction_enabled: true
-    entity_types:
-      - "SYMPTOM"
-      - "CONDITION"
-      - "MEDICATION"
-      - "PROCEDURE"
-      - "BODY_PART"
-      - "TEMPORAL"
-
-    relationship_types:
-      - "TREATS"
-      - "CAUSES"
-      - "LOCATED_IN"
-      - "CO_OCCURS_WITH"
-      - "PRECEDES"
-
-    min_entity_confidence: 0.7
-    min_relationship_confidence: 0.6
-
-    # Multi-modal search settings
-    vector_k: 30
-    text_k: 30
-    graph_k: 10
-    rrf_k: 60
-    fusion_method: "rrf"
-
-    # Performance settings
-    batch_size: 10
-    parallel_extraction: true
-    max_workers: 4
-
 # LLM Configuration (NVIDIA NIM LLM)
 llm:
   provider: "nvidia_nim"
-  model: "nvidia/llama-3.1-nemotron-70b-instruct"
-  base_url: "http://localhost:8000"    # NIM LLM service (local on EC2)
+  model: "meta/llama3-8b-instruct"
+  base_url: "http://localhost:8001/v1"    # NIM LLM service (local on EC2)
   temperature: 0.0
   max_tokens: 500
   timeout: 30
