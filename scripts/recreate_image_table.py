@@ -19,7 +19,7 @@ def recreate_table():
     # Drop existing table
     try:
         print("→ Dropping existing table...")
-        cursor.execute("DROP TABLE SQLUser.MedicalImageVectors")
+        cursor.execute("DROP TABLE VectorSearch.MIMICCXRImages")
         conn.commit()
         print("✓ Table dropped")
     except Exception as e:
@@ -29,7 +29,7 @@ def recreate_table():
     # Create table with correct VECTOR type
     print("\n→ Creating table with VECTOR(DOUBLE, 1024)...")
     cursor.execute("""
-        CREATE TABLE SQLUser.MedicalImageVectors (
+        CREATE TABLE VectorSearch.MIMICCXRImages (
             ImageID VARCHAR(255) PRIMARY KEY,
             PatientID VARCHAR(255) NOT NULL,
             StudyType VARCHAR(255) NOT NULL,
@@ -41,13 +41,13 @@ def recreate_table():
         )
     """)
     conn.commit()
-    print("✓ Table created with VECTOR(DOUBLE, 512)")
+    print("✓ Table created with VECTOR(DOUBLE, 1024)")
 
     # Create indexes
     print("\n→ Creating indexes...")
     try:
-        cursor.execute("CREATE INDEX idx_image_patient ON SQLUser.MedicalImageVectors(PatientID)")
-        cursor.execute("CREATE INDEX idx_study_type ON SQLUser.MedicalImageVectors(StudyType)")
+        cursor.execute("CREATE INDEX idx_image_patient ON VectorSearch.MIMICCXRImages(PatientID)")
+        cursor.execute("CREATE INDEX idx_study_type ON VectorSearch.MIMICCXRImages(StudyType)")
         conn.commit()
         print("✓ Indexes created")
     except Exception as e:

@@ -39,12 +39,12 @@ def load_config(config_path: str) -> dict:
         return yaml.safe_load(f)
 
 
-# DDL for SQLUser.Entities table
+# DDL for RAG.Entities table
 # Pain Point #2 for iris-vector-rag team:
 # Vector dimension should be configurable. Hardcoding 384 is inflexible.
 # NVIDIA NIM uses 1024-dimensional vectors, so we need to support that.
 CREATE_ENTITIES_TABLE = """
-CREATE TABLE SQLUser.Entities (
+CREATE TABLE RAG.Entities (
   EntityID BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   EntityText VARCHAR(500) NOT NULL,
   EntityType VARCHAR(50) NOT NULL,
@@ -56,16 +56,16 @@ CREATE TABLE SQLUser.Entities (
 )
 """
 
-# Indexes for SQLUser.Entities
+# Indexes for RAG.Entities
 CREATE_ENTITIES_INDEXES = [
-    "CREATE INDEX idx_entities_type ON SQLUser.Entities(EntityType)",
-    "CREATE INDEX idx_entities_confidence ON SQLUser.Entities(Confidence)",
-    "CREATE INDEX idx_entities_resource ON SQLUser.Entities(ResourceID)"
+    "CREATE INDEX idx_entities_type ON RAG.Entities(EntityType)",
+    "CREATE INDEX idx_entities_confidence ON RAG.Entities(Confidence)",
+    "CREATE INDEX idx_entities_resource ON RAG.Entities(ResourceID)"
 ]
 
-# DDL for SQLUser.EntityRelationships table
+# DDL for RAG.EntityRelationships table
 CREATE_RELATIONSHIPS_TABLE = """
-CREATE TABLE SQLUser.EntityRelationships (
+CREATE TABLE RAG.EntityRelationships (
   RelationshipID BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   SourceEntityID BIGINT NOT NULL,
   TargetEntityID BIGINT NOT NULL,
@@ -77,12 +77,12 @@ CREATE TABLE SQLUser.EntityRelationships (
 )
 """
 
-# Indexes for SQLUser.EntityRelationships
+# Indexes for RAG.EntityRelationships
 CREATE_RELATIONSHIPS_INDEXES = [
-    "CREATE INDEX idx_relationships_type ON SQLUser.EntityRelationships(RelationshipType)",
-    "CREATE INDEX idx_relationships_source ON SQLUser.EntityRelationships(SourceEntityID)",
-    "CREATE INDEX idx_relationships_target ON SQLUser.EntityRelationships(TargetEntityID)",
-    "CREATE INDEX idx_relationships_source_type ON SQLUser.EntityRelationships(SourceEntityID, RelationshipType)"
+    "CREATE INDEX idx_relationships_type ON RAG.EntityRelationships(RelationshipType)",
+    "CREATE INDEX idx_relationships_source ON RAG.EntityRelationships(SourceEntityID)",
+    "CREATE INDEX idx_relationships_target ON RAG.EntityRelationships(TargetEntityID)",
+    "CREATE INDEX idx_relationships_source_type ON RAG.EntityRelationships(SourceEntityID, RelationshipType)"
 ]
 
 
@@ -108,26 +108,31 @@ def create_tables_aws(config_path: str):
         print(f"[INFO] Connecting to AWS IRIS at {host}:{port}, namespace {namespace}...")
         print(f"[INFO] Note: Using namespace '{namespace}' with fully qualified table names")
 
-        conn = iris.connect(host, port, namespace, username, password)
+        # Use centralized connection logic to handle driver quirks
+        from src.db.connection import DatabaseConnection
+        conn = DatabaseConnection.get_connection(
+            hostname=host, port=port, namespace=namespace,
+            username=username, password=password
+        )
         cursor = conn.cursor()
         print("[INFO] ✅ Connected to AWS IRIS")
 
         # Drop existing tables if they exist
         print("[INFO] Dropping existing tables if they exist...")
         try:
-            cursor.execute("DROP TABLE IF EXISTS SQLUser.EntityRelationships")
-            cursor.execute("DROP TABLE IF EXISTS SQLUser.Entities")
+            cursor.execute("DROP TABLE IF EXISTS RAG.EntityRelationships")
+            cursor.execute("DROP TABLE IF EXISTS RAG.Entities")
             print("[INFO] ✅ Existing tables dropped")
         except Exception as e:
             print(f"[WARN] Could not drop tables (may not exist): {e}")
 
-        # Create SQLUser.Entities table
-        print("[INFO] Creating SQLUser.Entities table with VECTOR(DOUBLE, 1024)...")
+        # Create RAG.Entities table
+        print("[INFO] Creating RAG.Entities table with VECTOR(DOUBLE, 1024)...")
         cursor.execute(CREATE_ENTITIES_TABLE)
-        print("[INFO] ✅ Created table SQLUser.Entities")
+        print("[INFO] ✅ Created table RAG.Entities")
 
-        # Create indexes for SQLUser.Entities
-        print("[INFO] Creating indexes on SQLUser.Entities...")
+        # Create indexes for RAG.Entities
+        print("[INFO] Creating indexes on RAG.Entities...")
         for i, idx_sql in enumerate(CREATE_ENTITIES_INDEXES, 1):
             try:
                 cursor.execute(idx_sql)
@@ -135,13 +140,13 @@ def create_tables_aws(config_path: str):
             except Exception as e:
                 print(f"[WARN]   ⚠ Could not create index {i} (may already exist): {e}")
 
-        # Create SQLUser.EntityRelationships table
-        print("[INFO] Creating SQLUser.EntityRelationships table...")
+        # Create RAG.EntityRelationships table
+        print("[INFO] Creating RAG.EntityRelationships table...")
         cursor.execute(CREATE_RELATIONSHIPS_TABLE)
-        print("[INFO] ✅ Created table SQLUser.EntityRelationships")
+        print("[INFO] ✅ Created table RAG.EntityRelationships")
 
-        # Create indexes for SQLUser.EntityRelationships
-        print("[INFO] Creating indexes on SQLUser.EntityRelationships...")
+        # Create indexes for RAG.EntityRelationships
+        print("[INFO] Creating indexes on RAG.EntityRelationships...")
         for i, idx_sql in enumerate(CREATE_RELATIONSHIPS_INDEXES, 1):
             try:
                 cursor.execute(idx_sql)
@@ -154,13 +159,13 @@ def create_tables_aws(config_path: str):
 
         # Verify table creation
         print("\n[INFO] Verifying table creation...")
-        cursor.execute("SELECT COUNT(*) FROM SQLUser.Entities")
+        cursor.execute("SELECT COUNT(*) FROM RAG.Entities")
         entities_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM SQLUser.EntityRelationships")
+        cursor.execute("SELECT COUNT(*) FROM RAG.EntityRelationships")
         relationships_count = cursor.fetchone()[0]
 
-        print(f"[INFO] ✅ SQLUser.Entities table verified (current rows: {entities_count})")
-        print(f"[INFO] ✅ SQLUser.EntityRelationships table verified (current rows: {relationships_count})")
+        print(f"[INFO] ✅ RAG.Entities table verified (current rows: {entities_count})")
+        print(f"[INFO] ✅ RAG.EntityRelationships table verified (current rows: {relationships_count})")
 
         # Close connection
         cursor.close()
@@ -168,8 +173,8 @@ def create_tables_aws(config_path: str):
 
         print("\n[INFO] ===== Knowledge Graph Tables Created Successfully on AWS =====")
         print("[INFO] Tables:")
-        print("[INFO]   - SQLUser.Entities (VECTOR DOUBLE 1024)")
-        print("[INFO]   - SQLUser.EntityRelationships")
+        print("[INFO]   - RAG.Entities (VECTOR DOUBLE 1024)")
+        print("[INFO]   - RAG.EntityRelationships")
         print("[INFO] AWS initialization complete!")
 
         return True
