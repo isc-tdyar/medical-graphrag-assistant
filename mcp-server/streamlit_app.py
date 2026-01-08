@@ -1525,29 +1525,11 @@ def demo_mode_search(user_message: str):
             st.write("Chart displayed above showing entity distribution.")
             render_chart(tool_name, data, f"demo_{tool_name}")
         elif tool_name == "search_medical_images":
-            images = data.get("images", [])
-            if images:
-                st.subheader(f"Found {len(images)} Images (Demo Mode)")
-                cols = st.columns(3)
-                for idx, img in enumerate(images):
-                    with cols[idx % 3]:
-                        img_path = img.get("image_path")
-                        if img_path and not os.path.isabs(img_path):
-                            img_path = os.path.abspath(os.path.join(parent_dir, img_path))
-                        caption = f"{img.get('study_type', 'Unknown')} - Patient {img.get('patient_id', 'Unknown')}"
-                        if img_path and os.path.exists(img_path):
-                            if img_path.lower().endswith('.dcm'):
-                                dicom_img = load_dicom_image(img_path)
-                                if dicom_img: st.image(dicom_img, caption=caption, use_container_width=True)
-                            else:
-                                st.image(img_path, caption=caption, use_container_width=True)
-            else:
-                st.write("No images found matching your query.")
-        
-        return {
-            "text": text_response,
-            "execution_log": execution_log
-        }
+            return {
+                "text": f"Found {len(data.get('images', []))} images for your query (Demo Mode).",
+                "images": data.get("images", []),
+                "execution_log": execution_log
+            }
 
     except Exception as e:
         status.empty()
@@ -2169,6 +2151,28 @@ for idx, msg in enumerate(st.session_state.messages):
             # Display text content first
             if "text" in content:
                 st.write(content["text"])
+
+            # Render images if present (for Demo Mode images)
+            if "images" in content:
+                images = content["images"]
+                if images:
+                    st.subheader(f"Found {len(images)} Images")
+                    cols = st.columns(3)
+                    for idx_img, img in enumerate(images):
+                        with cols[idx_img % 3]:
+                            img_path = img.get("image_path")
+                            if img_path and not os.path.isabs(img_path):
+                                img_path = os.path.abspath(os.path.join(parent_dir, img_path))
+                            caption = f"{img.get('study_type', 'Unknown')} - Patient {img.get('patient_id', 'Unknown')}"
+                            if img_path and os.path.exists(img_path):
+                                if img_path.lower().endswith('.dcm'):
+                                    dicom_img = load_dicom_image(img_path)
+                                    if dicom_img:
+                                        st.image(dicom_img, caption=caption, use_container_width=True)
+                                else:
+                                    st.image(img_path, caption=caption, use_container_width=True)
+                            else:
+                                st.info(f"Image: {caption}")
 
             # Extract and render execution details
             execution_log = content.get("execution_log", [])
