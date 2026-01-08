@@ -272,25 +272,25 @@ def put_fhir_resource(resource, resource_type=None, resource_id=None):
 
 
 def execute_iris_sql(sql):
-    """Execute SQL against IRIS database via iris sql command."""
+    """Execute SQL against IRIS database via docker exec iris-fhir."""
     # Escape single quotes for shell
     escaped_sql = sql.replace("'", "''")
 
     # Build the command
-    cmd = f'iris sql IRIS -U {IRIS_NAMESPACE}'
-    full_cmd = f'echo "{escaped_sql}" | {cmd}'
+    cmd = f"docker exec iris-fhir bash -c 'echo \"{escaped_sql}\" | iris sql IRIS -U {IRIS_NAMESPACE} 2>/dev/null'"
 
     try:
         result = subprocess.run(
-            full_cmd,
+            cmd,
             shell=True,
             capture_output=True,
             text=True,
             timeout=30
         )
-        if "ERROR" in result.stdout or "ERROR" in result.stderr:
-            return False, result.stdout + result.stderr
-        return True, result.stdout
+        output = result.stdout + result.stderr
+        if "ERROR" in output:
+            return False, output
+        return True, output
     except subprocess.TimeoutExpired:
         return False, "Timeout"
     except Exception as e:
