@@ -22,6 +22,16 @@ Tools provided:
 import sys
 import os
 
+# Load .env file at the very top
+try:
+    from dotenv import load_dotenv
+    # Look for .env in parent directory
+    env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+    if os.path.exists(env_path):
+        load_dotenv(env_path)
+except ImportError:
+    pass
+
 # Add project root to path to find src (MUST be first in path)
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if parent_dir not in sys.path:
@@ -96,11 +106,23 @@ server = Server("fhir-graphrag-server")
 embedder = None
 
 def get_embedder():
-    """Get or initialize NV-CLIP embedder."""
+    """Get or initialize NV-CLIP embedder using configuration."""
     global embedder
     if embedder is None and NVCLIPEmbeddings:
         try:
-            embedder = NVCLIPEmbeddings()
+            # Load config to get base URL
+            from src.search.base import BaseSearchService
+            base_service = BaseSearchService()
+            config = base_service.config
+            
+            nvclip_config = config.get('nvclip', {})
+            base_url = nvclip_config.get('base_url')
+            
+            if base_url:
+                print(f"Initializing NV-CLIP with base_url: {base_url}", file=sys.stderr)
+                embedder = NVCLIPEmbeddings(base_url=base_url)
+            else:
+                embedder = NVCLIPEmbeddings()
         except Exception as e:
             print(f"Warning: Failed to initialize NV-CLIP: {e}", file=sys.stderr)
     return embedder
