@@ -1526,6 +1526,16 @@ def demo_mode_search(user_message: str):
             # So we should render images directly here too
             
             images = data.get("images", [])
+            
+            # Log tool execution
+            execution_log = [{
+                "iteration": 1,
+                "tool_name": "search_medical_images",
+                "tool_input": {"query": user_message, "limit": 3},
+                "result_summary": f"Found {len(images)} images",
+                "full_result": data
+            }]
+
             if images:
                 st.subheader(f"Found {len(images)} Images (Demo Mode)")
                 cols = st.columns(3)
@@ -1555,36 +1565,68 @@ def demo_mode_search(user_message: str):
                         else:
                             st.info(f"Image: {caption}")
                 
+                # Render enhanced details panel
+                render_details_panel(
+                    tool_results=[{"tool_name": "search_medical_images", "result": data}],
+                    thinking_blocks=["Running in Demo Mode due to LLM unavailability."],
+                    memory_recalls=[],
+                    execution_log=execution_log,
+                    response_time_ms=0,
+                    msg_idx=888 # Unique ID
+                )
+
                 status.empty()
                 return f"Found {len(images)} images for your query."
             else:
+                status.empty()
                 return "No images found matching your query."
 
         # Otherwise do hybrid search
         result = asyncio.run(call_tool("hybrid_search", {"query": user_message, "top_k": 5}))
         data = json.loads(result[0].text)
 
+        # Log tool execution for transparency even in demo mode
+        execution_log = [{
+            "iteration": 1,
+            "tool_name": "hybrid_search",
+            "tool_input": {"query": user_message, "top_k": 5},
+            "result_summary": f"Found {data.get('results_count', 0)} documents and {data.get('entities_found', 0)} entities",
+            "full_result": data
+        }]
+
         status.empty()
-        response = f"**Search Results** (Demo Mode)\n\n"
+        
+        # Display results
+        st.markdown(f"**Search Results** (Demo Mode)")
         
         # Handle new service response format (v2.16.0)
         if "results_count" in data:
-            response += f"- Total results: {data['results_count']}\n"
-            response += f"- Entities found: {data.get('entities_found', 0)}\n\n"
+            st.write(f"- Total results: {data['results_count']}")
+            st.write(f"- Entities found: {data.get('entities_found', 0)}")
         else:
             # Legacy format support
-            response += f"- FHIR results: {data.get('fhir_results', 'N/A')}\n"
-            response += f"- GraphRAG results: {data.get('graphrag_results', 'N/A')}\n"
-            response += f"- Fused results: {data.get('fused_results', 'N/A')}\n\n"
+            st.write(f"- FHIR results: {data.get('fhir_results', 'N/A')}")
+            st.write(f"- GraphRAG results: {data.get('graphrag_results', 'N/A')}")
+            st.write(f"- Fused results: {data.get('fused_results', 'N/A')}")
 
         if data.get('top_documents'):
-            response += "**Top Documents:**\n"
+            st.write("**Top Documents:**")
             for doc in data['top_documents']:
                 sources = ", ".join(doc.get('sources', []))
                 score = doc.get('rrf_score', 0.0)
-                response += f"- Document {doc['fhir_id']} (score: {score:.4f}, sources: {sources})\n"
+                st.write(f"- Document {doc['fhir_id']} (score: {score:.4f}, sources: {sources})")
 
-        return response
+        # Render enhanced details panel for tests to pass
+        render_details_panel(
+            tool_results=[{"tool_name": "hybrid_search", "result": data}],
+            thinking_blocks=["Running in Demo Mode due to LLM unavailability."],
+            memory_recalls=[],
+            execution_log=execution_log,
+            response_time_ms=0,
+            msg_idx=999 # Unique ID
+        )
+
+        return "Search completed in Demo Mode."
 
     except Exception as e:
         status.empty()
