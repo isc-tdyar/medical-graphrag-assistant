@@ -453,15 +453,13 @@ def main():
     for patient in patients:
         for entity in patient["entities"]:
             sql = f"""INSERT INTO RAG.Entities
-                (EntityID, EntityType, EntityText, SourceDocumentID, PatientID, Confidence)
-                VALUES (?, ?, ?, ?, ?, ?)"""
+                (EntityText, EntityType, ResourceID, Confidence)
+                VALUES (?, ?, ?, ?)"""
 
             params = (
-                entity["entity_id"], 
-                entity["entity_type"], 
                 entity["entity_text"],
-                entity["source_document_id"], 
-                entity["patient_id"], 
+                entity["entity_type"], 
+                int(entity["source_document_id"].split('-p')[1].replace('-', '')),
                 entity["confidence"]
             )
 
@@ -482,15 +480,18 @@ def main():
     for patient in patients:
         for rel in patient["relationships"]:
             sql = f"""INSERT INTO RAG.EntityRelationships
-                (RelationshipID, SourceEntityID, TargetEntityID, RelationType, SourceDocumentID, Confidence)
-                VALUES (?, ?, ?, ?, ?, ?)"""
+                (SourceEntityID, TargetEntityID, RelationshipType, ResourceID, Confidence)
+                VALUES (?, ?, ?, ?, ?)"""
+
+            source_id = int(rel["source_entity_id"].split('-')[2])
+            target_id = int(rel["target_entity_id"].split('-')[2])
+            doc_id = int(rel["source_document_id"].split('-p')[1].replace('-', ''))
 
             params = (
-                rel["relationship_id"], 
-                rel["source_entity_id"], 
-                rel["target_entity_id"],
+                source_id,
+                target_id,
                 rel["relation_type"], 
-                rel["source_document_id"], 
+                doc_id,
                 rel["confidence"]
             )
 
