@@ -6,7 +6,7 @@ database:
   iris:
     host: "localhost"              # Local on EC2 (Docker container)
     port: 32782                    # IRIS SQL port (Docker mapped)
-    namespace: "DEMO"              # Use DEMO namespace for application data
+    namespace: "%SYS"              # Use %SYS namespace for reliable access on AWS
     username: "_SYSTEM"            # Database username
     password: "SYS"                # SuperUser password
     connection_timeout: 30
