@@ -1474,7 +1474,10 @@ def render_chart(tool_name: str, data, unique_id: str = None):
 def demo_mode_search(user_message: str):
     """Fallback search mode when LLM is unavailable"""
     status = st.status("🔍 Searching medical database (Demo Mode)...")
-    query_lower = user_message.lower()
+    
+    # Strip the [IMPORTANT: ...] suffix added in chat_with_tools for keyword matching
+    clean_query = user_message.split("\n\n[IMPORTANT:")[0]
+    query_lower = clean_query.lower()
     
     try:
         # Check for specific tool calls in natural language
@@ -1489,14 +1492,14 @@ def demo_mode_search(user_message: str):
             result = asyncio.run(call_tool(tool_name, {}))
         elif "knowledge graph" in query_lower or "entities" in query_lower:
             tool_name = "search_knowledge_graph"
-            result = asyncio.run(call_tool(tool_name, {"query": user_message, "limit": 5}))
+            result = asyncio.run(call_tool(tool_name, {"query": clean_query, "limit": 5}))
         elif "image" in query_lower or "x-ray" in query_lower or "scan" in query_lower:
             tool_name = "search_medical_images"
-            result = asyncio.run(call_tool(tool_name, {"query": user_message, "limit": 3}))
+            result = asyncio.run(call_tool(tool_name, {"query": clean_query, "limit": 3}))
         else:
             # Default to hybrid search
             tool_name = "hybrid_search"
-            result = asyncio.run(call_tool(tool_name, {"query": user_message, "top_k": 5}))
+            result = asyncio.run(call_tool(tool_name, {"query": clean_query, "top_k": 5}))
 
         data = json.loads(result[0].text)
 
