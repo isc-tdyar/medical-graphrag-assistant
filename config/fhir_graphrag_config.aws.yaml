@@ -65,15 +65,14 @@ embeddings:
   normalize: true
   device: "cuda"                    # Use GPU on EC2 g5.xlarge
 
-# LLM Configuration (NVIDIA NIM LLM)
+# LLM Configuration (AWS Bedrock)
 llm:
-  provider: "nvidia_nim"
-  model: "meta/llama3-8b-instruct"
-  base_url: "http://localhost:8001/v1"    # NIM LLM service (local on EC2)
+  provider: "bedrock"
+  model: "anthropic.claude-3-5-sonnet-20240620-v1:0"
+  region: "us-east-1"
   temperature: 0.0
-  max_tokens: 500
-  timeout: 30
-  fallback_to_regex: true
+  max_tokens: 1000
+  timeout: 60
 
 # Logging Configuration
 logging:
