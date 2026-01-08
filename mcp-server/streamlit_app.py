@@ -1919,10 +1919,15 @@ def chat_with_tools(user_message: str):
                 })
 
             # Call LLM based on provider
-            if st.session_state.llm_provider in ('openai', 'nim'):
-                response = call_openai_compatible(messages, converse_tools if converse_tools else None)
-            else:
-                response = call_claude_via_cli(messages, converse_tools if converse_tools else None)
+            try:
+                if st.session_state.llm_provider in ('openai', 'nim'):
+                    response = call_openai_compatible(messages, converse_tools if converse_tools else None)
+                else:
+                    response = call_claude_via_cli(messages, converse_tools if converse_tools else None)
+            except Exception as llm_err:
+                print(f"LLM Error ({st.session_state.llm_provider}): {llm_err}", file=sys.stderr)
+                # Fallback to demo mode if LLM fails
+                return demo_mode_search(user_message)
 
             # Process response
             stop_reason = response.get('stopReason')
