@@ -6,7 +6,7 @@ Handles configuration and database connections.
 import os
 import sys
 import yaml
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 # Add project root to path for imports
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
@@ -18,13 +18,20 @@ from src.db.connection import get_connection
 class BaseSearchService:
     """Base class for search services providing shared infrastructure."""
     
-    def __init__(self, config_path: str = "config/fhir_graphrag_config.yaml"):
+    def __init__(self, config_path: Optional[str] = None):
         """
         Initialize base search service.
         
         Args:
-            config_path: Path to configuration file
+            config_path: Path to configuration file. If None, uses CONFIG_PATH env var 
+                        or defaults to local/aws config.
         """
+        if config_path is None:
+            config_path = os.getenv("CONFIG_PATH")
+            
+        if config_path is None:
+            config_path = "config/fhir_graphrag_config.yaml"
+            
         self.config_path = config_path
         self.config = self._load_config()
         self.connection = None
@@ -32,15 +39,23 @@ class BaseSearchService:
 
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from YAML file."""
-        if not os.path.exists(self.config_path):
-            # Fallback to AWS config if local config doesn't exist
-            aws_config = "config/fhir_graphrag_config.aws.yaml"
+        # Try relative to current working directory first
+        config_path = self.config_path
+        
+        if not os.path.exists(config_path):
+            # Try relative to project root
+            config_path = os.path.join(PROJECT_ROOT, self.config_path)
+            
+        if not os.path.exists(config_path):
+            # Fallback to AWS config
+            aws_config = os.path.join(PROJECT_ROOT, "config/fhir_graphrag_config.aws.yaml")
             if os.path.exists(aws_config):
-                self.config_path = aws_config
+                config_path = aws_config
             else:
-                raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
+                raise FileNotFoundError(f"Configuration file not found: {self.config_path} (checked {config_path})")
 
-        with open(self.config_path, 'r') as f:
+        self.config_path = config_path
+        with open(config_path, 'r') as f:
             return yaml.safe_load(f)
 
     def connect(self):
