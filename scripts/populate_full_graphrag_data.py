@@ -271,56 +271,34 @@ def put_fhir_resource(resource, resource_type=None, resource_id=None):
         return False, str(e)
 
 
-def execute_iris_sql(sql):
-    """Execute SQL against IRIS database via docker exec iris-fhir."""
-    # Escape single quotes for shell
-    escaped_sql = sql.replace("'", "''")
+from src.db.connection import get_connection
 
-    # Build the command
-    cmd = f"docker exec iris-fhir bash -c 'echo \"{escaped_sql}\" | iris sql IRIS -U {IRIS_NAMESPACE}'"
-
+def execute_iris_sql(sql, params=None):
+    """Execute SQL against IRIS database via DBAPI."""
     try:
-        result = subprocess.run(
-            cmd,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-        output = result.stdout + result.stderr
-        if "ERROR" in output:
-            return False, output
-        return True, output
-    except subprocess.TimeoutExpired:
-        return False, "Timeout"
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        if params:
+            cursor.execute(sql, params)
+        else:
+            cursor.execute(sql)
+            
+        affected = cursor.rowcount
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        # Return a string containing "Affected" to match script logic
+        return True, f"{affected} Row(s) Affected"
     except Exception as e:
         return False, str(e)
 
 
-def execute_iris_sql_remote(sql, host="13.218.19.254"):
-    """Execute SQL against remote IRIS database via SSH."""
-    # Properly escape quotes for nested shell
-    # Replace ' with '\'' for shell escaping
-    escaped_sql = sql.replace("'", "'\\''")
-
-    ssh_cmd = f"""ssh -o StrictHostKeyChecking=no -i ~/.ssh/fhir-ai-key-recovery.pem ubuntu@{host} "docker exec iris-fhir bash -c 'echo \\"{escaped_sql}\\" | iris sql IRIS -U DEMO 2>/dev/null'" """
-
-    try:
-        result = subprocess.run(
-            ssh_cmd,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-        output = result.stdout + result.stderr
-        if "ERROR #" in output:
-            return False, output
-        return True, output
-    except subprocess.TimeoutExpired:
-        return False, "Timeout"
-    except Exception as e:
-        return False, str(e)
+def execute_iris_sql_remote(sql, params=None, host="13.218.19.254"):
+    """Execute SQL against remote IRIS database (delegates to local execute_iris_sql if on host)."""
+    # If we are on the EC2, we should just use execute_iris_sql
+    return execute_iris_sql(sql, params)
 
 
 def generate_mock_embedding():
@@ -431,16 +409,21 @@ def main():
             embedding = generate_mock_embedding()
             embedding_str = ",".join(str(v) for v in embedding)
 
-            # Escape text content
-            text_escaped = note["text_content"].replace("'", "''")
-
             sql = f"""INSERT INTO SQLUser.ClinicalNoteVectors
                 (ResourceID, PatientID, DocumentType, TextContent, Embedding, EmbeddingModel, SourceBundle, CreatedAt)
-                VALUES ('{note["note_id"]}', '{note["patient_id"]}', '{note["document_type"]}',
-                '{text_escaped}', TO_VECTOR('{embedding_str}', DOUBLE, 1024),
-                'nvidia/nv-embedqa-e5-v5', 'synthetic-data.json', NOW())"""
+                VALUES (?, ?, ?, ?, TO_VECTOR(?, DOUBLE, 1024), ?, ?, NOW())"""
 
-            success, result = execute_sql(sql)
+            params = (
+                note["note_id"], 
+                note["patient_id"], 
+                note["document_type"],
+                note["text_content"], 
+                embedding_str,
+                'nvidia/nv-embedqa-e5-v5', 
+                'synthetic-data.json'
+            )
+
+            success, result = execute_sql(sql, params)
             if success and "Affected" in result:
                 stats["clinical_notes_created"] += 1
 
@@ -454,14 +437,20 @@ def main():
     print("Creating Entities in IRIS RAG.Entities table...")
     for patient in patients:
         for entity in patient["entities"]:
-            text_escaped = entity["entity_text"].replace("'", "''")
-
             sql = f"""INSERT INTO RAG.Entities
                 (EntityID, EntityType, EntityText, SourceDocumentID, PatientID, Confidence)
-                VALUES ('{entity["entity_id"]}', '{entity["entity_type"]}', '{text_escaped}',
-                '{entity["source_document_id"]}', '{entity["patient_id"]}', {entity["confidence"]})"""
+                VALUES (?, ?, ?, ?, ?, ?)"""
 
-            success, result = execute_sql(sql)
+            params = (
+                entity["entity_id"], 
+                entity["entity_type"], 
+                entity["entity_text"],
+                entity["source_document_id"], 
+                entity["patient_id"], 
+                entity["confidence"]
+            )
+
+            success, result = execute_sql(sql, params)
             if success and "Affected" in result:
                 stats["entities_created"] += 1
 
@@ -477,10 +466,18 @@ def main():
         for rel in patient["relationships"]:
             sql = f"""INSERT INTO RAG.EntityRelationships
                 (RelationshipID, SourceEntityID, TargetEntityID, RelationType, SourceDocumentID, Confidence)
-                VALUES ('{rel["relationship_id"]}', '{rel["source_entity_id"]}', '{rel["target_entity_id"]}',
-                '{rel["relation_type"]}', '{rel["source_document_id"]}', {rel["confidence"]})"""
+                VALUES (?, ?, ?, ?, ?, ?)"""
 
-            success, result = execute_sql(sql)
+            params = (
+                rel["relationship_id"], 
+                rel["source_entity_id"], 
+                rel["target_entity_id"],
+                rel["relation_type"], 
+                rel["source_document_id"], 
+                rel["confidence"]
+            )
+
+            success, result = execute_sql(sql, params)
             if success and "Affected" in result:
                 stats["relationships_created"] += 1
 
