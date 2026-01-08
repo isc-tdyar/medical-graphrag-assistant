@@ -863,13 +863,16 @@ if 'llm_provider' not in st.session_state:
     nim_llm_url = os.getenv('NIM_LLM_URL')  # e.g., http://localhost:8003/v1
     if nim_llm_url and OPENAI_AVAILABLE:
         try:
-            client = OpenAI(base_url=nim_llm_url, api_key="not-needed")
-            # NIM uses OpenAI-compatible API
-            st.session_state.openai_client = client
-            st.session_state.llm_provider = 'nim'
-            st.session_state.llm_model = os.getenv('NIM_LLM_MODEL', 'meta/llama-3.1-8b-instruct')
-            st.success(f"✅ Using local NIM LLM ({st.session_state.llm_model}) - data stays on instance")
-        except Exception as e:
+            # Quick health check for NIM before using it
+            import urllib.request
+            with urllib.request.urlopen(f"{nim_llm_url}/models", timeout=2) as response:
+                if response.status == 200:
+                    client = OpenAI(base_url=nim_llm_url, api_key="not-needed")
+                    st.session_state.openai_client = client
+                    st.session_state.llm_provider = 'nim'
+                    st.session_state.llm_model = os.getenv('NIM_LLM_MODEL', 'meta/llama-3.1-8b-instruct')
+                    st.success(f"✅ Using local NIM LLM ({st.session_state.llm_model}) - data stays on instance")
+        except Exception:
             pass  # Try next option
 
     # 2. Check for OpenAI
