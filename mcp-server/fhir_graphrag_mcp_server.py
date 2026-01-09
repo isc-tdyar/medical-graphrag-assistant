@@ -106,26 +106,26 @@ server = Server("fhir-graphrag-server")
 embedder = None
 
 def get_embedder():
-    """Get or initialize NV-CLIP embedder using configuration."""
     global embedder
     if embedder is None and NVCLIPEmbeddings:
         try:
-            # Load config to get base URL
             from src.search.base import BaseSearchService
             base_service = BaseSearchService()
             config = base_service.config
-            
             nvclip_config = config.get('nvclip', {})
             base_url = nvclip_config.get('base_url')
-            
             if base_url:
+                import sys
                 print(f"Initializing NV-CLIP with base_url: {base_url}", file=sys.stderr)
                 embedder = NVCLIPEmbeddings(base_url=base_url)
             else:
                 embedder = NVCLIPEmbeddings()
         except Exception as e:
+            import sys
             print(f"Warning: Failed to initialize NV-CLIP: {e}", file=sys.stderr)
     return embedder
+
+
 
 # Initialize vector memory system
 vector_memory = None
