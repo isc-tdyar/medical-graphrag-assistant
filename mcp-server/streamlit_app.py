@@ -1040,7 +1040,6 @@ def execute_mcp_tool(tool_name: str, tool_input: dict):
         result = asyncio.run(call_tool(tool_name, tool_input))
         return json.loads(result[0].text)
     except Exception as e:
-        import sys
         print(f"Error in vector search: {e}", file=sys.stderr)
         return {"error": str(e)}
 
@@ -1073,7 +1072,6 @@ def load_dicom_image(dicom_path):
 def render_chart(tool_name: str, data, unique_id: str = None):
     """Render visualization if tool returns chart data"""
     # Debug logging
-    import sys
     import traceback
     import time
 
@@ -1566,7 +1564,6 @@ def demo_mode_search(user_message: str):
         }
 
     except Exception as e:
-        import sys
         print(f"DEBUG: Demo Mode error: {e}", file=sys.stderr)
         status.empty()
         return f"❌ Error in demo mode: {str(e)}"
@@ -1781,7 +1778,6 @@ def recall_relevant_memories(query: str, top_k: int = 3) -> str:
         memory_context += "[END MEMORY]\n\n"
         return memory_context
     except Exception as e:
-        import sys
         print(f"Error recalling memories: {e}", file=sys.stderr)
         return ""
 
@@ -1881,7 +1877,6 @@ def chat_with_tools(user_message: str):
                 else:
                     response = call_claude_via_cli(messages, converse_tools if converse_tools else None)
             except Exception as llm_err:
-                import sys
                 print(f"LLM Error ({st.session_state.llm_provider}): {llm_err}", file=sys.stderr)
                 # Fallback to demo mode if LLM fails
                 return demo_mode_search(user_message)
@@ -2137,7 +2132,6 @@ with st.sidebar:
 # Display chat
 for idx, msg in enumerate(st.session_state.messages):
     # Debug logging
-    import sys
     print(f"\n=== MESSAGE {idx} ===", file=sys.stderr)
     print(f"Type: {type(msg)}", file=sys.stderr)
     print(f"Value: {msg}", file=sys.stderr)

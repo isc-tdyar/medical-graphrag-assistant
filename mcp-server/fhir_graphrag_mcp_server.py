@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+import sys
 FHIR + GraphRAG MCP Server
 
 Model Context Protocol (MCP) server exposing FHIR repository search,
@@ -115,13 +116,11 @@ def get_embedder():
             nvclip_config = config.get('nvclip', {})
             base_url = nvclip_config.get('base_url')
             if base_url:
-                import sys
                 print(f"Initializing NV-CLIP with base_url: {base_url}", file=sys.stderr)
                 embedder = NVCLIPEmbeddings(base_url=base_url)
             else:
                 embedder = NVCLIPEmbeddings()
         except Exception as e:
-            import sys
             print(f"Warning: Failed to initialize NV-CLIP: {e}", file=sys.stderr)
     return embedder
 
@@ -558,7 +557,6 @@ def is_table_not_found_error(error_msg: str) -> bool:
 
 @server.call_tool()
 async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
-    import sys
     """Handle tool invocations."""
 
     # Tools that use FHIR REST only (no IRIS DB connection required)
