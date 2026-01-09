@@ -6,8 +6,11 @@ Supports both image and text embeddings for cross-modal search.
 """
 
 import os
+import sys
 import base64
 from openai import OpenAI
+
+
 from PIL import Image
 import io
 import numpy as np
