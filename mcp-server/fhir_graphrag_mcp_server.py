@@ -558,6 +558,7 @@ def is_table_not_found_error(error_msg: str) -> bool:
 
 @server.call_tool()
 async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
+    import sys
     """Handle tool invocations."""
 
     # Tools that use FHIR REST only (no IRIS DB connection required)
