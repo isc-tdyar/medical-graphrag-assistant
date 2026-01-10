@@ -62,7 +62,7 @@ def reset_security(username: str = "_SYSTEM", password: str = "SYS", fhir_app: s
         role_cmd = f"""
             set user = ##class(Security.Users).%OpenId("{username}")
             if \$isobject(user) {{
-                set user.Roles = user.Roles _ ",%DB_FHIR,%HS_FHIR_USER,%Manager"
+                set user.Roles = user.Roles _ ",%DB_FHIR,%HS_FHIR_USER,%Manager,%All"
                 write user.%Save()
             }}
         """
