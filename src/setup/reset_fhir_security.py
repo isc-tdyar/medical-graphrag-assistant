@@ -20,83 +20,58 @@ from src.db.connection import DatabaseConnection
 def reset_security(username: str = "_SYSTEM", password: str = "SYS", fhir_app: str = "/csp/healthshare/demo/fhir/r4"):
     """
     Perform deep reset of FHIR security settings.
+    Uses docker exec for maximum reliability when running on the host.
     """
-    import iris
+    import subprocess
+    import requests
+    from requests.auth import HTTPBasicAuth
+    
     print(f"Starting security reset for user {username} and app {fhir_app}...")
     
-    conn = None
+    def run_iris_cmd(cmd_string):
+        """Execute ObjectScript in the IRIS container."""
+        # Use heredoc to pipe commands into iris session
+        full_cmd = f"docker exec iris-fhir iris session IRIS <<EOF\nzn \"%SYS\"\n{cmd_string}\nhalt\nEOF"
+        return subprocess.run(full_cmd, shell=True, capture_output=True, text=True)
+
     try:
-        # 1. Connect to IRIS
-        # Try configured credentials first
-        try:
-            conn = DatabaseConnection.get_connection()
-        except Exception:
-            # Fallback to default superuser if config fails
-            print("Configured connection failed, trying defaults (_SYSTEM/SYS)...")
-            conn = DatabaseConnection.get_connection(username="_SYSTEM", password="SYS")
-            
-        db_native = iris.createIRIS(conn)
-        
-        # 2. Switch to %SYS namespace if needed
-        # We try both %SYSTEM.Process and %SYS.Process as naming varies by IRIS version/mapping
-        try:
-            current_ns = db_native.classMethodValue("%SYSTEM.Process", "Namespace")
-            print(f"Current namespace: {current_ns}")
-            if current_ns != "%SYS":
-                print("Switching to %SYS namespace...")
-                db_native.classMethodValue("%SYSTEM.Process", "SetNamespace", "%SYS")
-        except Exception:
-            try:
-                # Fallback to direct SQL or assume already in %SYS if defaults used
-                print("Note: Could not verify namespace via %SYSTEM.Process, proceeding...")
-            except Exception:
-                pass
-        
-        # 3. Reset User Password (FR-001)
-        print(f"Resetting password for user {username}...")
-        status = db_native.classMethodValue("Security.Users", "ChangePassword", username, password)
-        if status != 1:
-            print(f"Warning: Password reset might have failed (Status: {status})")
-            
-        # 4. Configure CSP Application (FR-002)
-        print(f"Ensuring Password auth is enabled for {fhir_app}...")
-        props_ref = iris.IRISReference({})
-        db_native.classMethodValue("Security.Applications", "Get", fhir_app, props_ref)
-        
-        # Enable Password (32) and ensure application is enabled
-        authen = int(props_ref.value.get("AuthenEnabled", 0))
-        props_ref.value["AuthenEnabled"] = authen | 32
-        props_ref.value["Enabled"] = 1
-        
-        status = db_native.classMethodValue("Security.Applications", "Modify", fhir_app, props_ref)
-        if status != 1:
-            print(f"Warning: Application modification failed (Status: {status})")
+        # 1. Reset Password
+        print(f"Resetting password for {username}...")
+        res = run_iris_cmd(f"write ##class(Security.Users).ChangePassword(\"{username}\", \"{password}\")")
+        if "1" not in res.stdout:
+            print(f"Warning: Password reset might have failed: {res.stderr} {res.stdout}")
 
-        # 5. Assign Roles (FR-003)
-        print(f"Assigning FHIR roles to {username}...")
-        props_ref = iris.IRISReference({})
-        db_native.classMethodValue("Security.Users", "Get", username, props_ref)
-        
-        roles = props_ref.value.get("Roles", "")
-        required_roles = ["%DB_FHIR", "%HS_FHIR_USER", "%Manager"]
-        for role in required_roles:
-            if role not in roles:
-                roles = f"{roles},{role}" if roles else role
-        
-        props_ref.value["Roles"] = roles
-        status = db_native.classMethodValue("Security.Users", "Modify", username, props_ref)
-        if status != 1:
-            print(f"Warning: Role assignment failed (Status: {status})")
+        # 2. Enable Password Auth for Application
+        print(f"Configuring application {fhir_app}...")
+        app_cmd = f"""
+            set app = ##class(Security.Applications).%OpenId("{fhir_app}")
+            if \$isobject(app) {{
+                set app.AuthenEnabled = 32
+                set app.Enabled = 1
+                write app.%Save()
+            }} else {{
+                write "APP_NOT_FOUND"
+            }}
+        """
+        res = run_iris_cmd(app_cmd)
+        if "1" not in res.stdout:
+            print(f"Warning: App config failed: {res.stdout}")
 
-        # 6. Verify Reset (FR-005)
-        print("Verifying FHIR connectivity...")
-        import requests
-        from requests.auth import HTTPBasicAuth
-        
-        # Get FHIR URL from environment or construct from app path
+        # 3. Assign Roles
+        print(f"Assigning roles to {username}...")
+        role_cmd = f"""
+            set user = ##class(Security.Users).%OpenId("{username}")
+            if \$isobject(user) {{
+                set user.Roles = user.Roles _ ",%DB_FHIR,%HS_FHIR_USER,%Manager"
+                write user.%Save()
+            }}
+        """
+        res = run_iris_cmd(role_cmd)
+
+        # 4. Verify connectivity
+        print("Verifying connectivity...")
         fhir_url = os.getenv("FHIR_BASE_URL")
         if not fhir_url:
-            # Fallback to standard mapping
             port = os.getenv("IRIS_PORT_WEB", "32783")
             fhir_url = f"http://localhost:{port}{fhir_app}"
             
@@ -109,15 +84,16 @@ def reset_security(username: str = "_SYSTEM", password: str = "SYS", fhir_app: s
             )
             if response.status_code == 200:
                 print("✅ FHIR connectivity verified!")
+                return True
             else:
                 print(f"⚠️ FHIR check returned status {response.status_code}")
         except Exception as e:
             print(f"⚠️ FHIR connectivity check failed: {e}")
 
         return True
-    finally:
-        if conn:
-            conn.close()
+    except Exception as e:
+        print(f"Error during reset: {e}")
+        return False
 
 def main():
     parser = argparse.ArgumentParser(description="Reset IRIS FHIR Security")
