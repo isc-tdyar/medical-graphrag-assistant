@@ -53,7 +53,8 @@ class FHIRRadiologyAdapter:
     """
 
     # FHIR base URL from environment or default
-    DEFAULT_FHIR_BASE_URL = "http://localhost:52773/fhir/r4"
+    # Priority: Env FHIR_BASE_URL > Internal mapping
+    DEFAULT_FHIR_BASE_URL = os.getenv("FHIR_BASE_URL", "http://localhost:32783/csp/healthshare/demo/fhir/r4")
 
     # MIMIC-CXR identifier systems
     MIMIC_STUDY_SYSTEM = "urn:mimic-cxr:study"

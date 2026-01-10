@@ -1841,176 +1841,191 @@ def chat_with_tools(user_message: str):
     # Add the new user message
     messages.append({"role": "user", "content": user_message})
 
-    status = st.empty()
-    chart_container = st.container()
-    text_container = st.container()
+    # Use st.status for better feedback during tool execution (Feature 005 enhancement)
+    status_msg = "🔍 Thinking..."
+    with st.status(status_msg, expanded=True) as status:
+        chart_container = st.container()
+        text_container = st.container()
 
-    # Track charts rendered in this conversation
-    rendered_charts = []
+        # Track charts rendered in this conversation
+        rendered_charts = []
 
-    # Track tool execution details for transparency
-    tool_execution_log = []
+        # Track tool execution details for transparency
+        tool_execution_log = []
 
-    # Log memory recall if it happened
-    if memory_context:
-        tool_execution_log.append({
-            "iteration": 0,
-            "type": "memory_recall",
-            "content": memory_context.strip()
-        })
+        # Log memory recall if it happened
+        if memory_context:
+            status.write("🧠 Recalling relevant medical context from memory...")
+            tool_execution_log.append({
+                "iteration": 0,
+                "type": "memory_recall",
+                "content": memory_context.strip()
+            })
 
-    max_iterations = 10  # Increased from 5 to handle complex multi-tool queries
-    iteration = 0
+        max_iterations = 10  # Increased from 5 to handle complex multi-tool queries
+        iteration = 0
 
-    while iteration < max_iterations:
-        iteration += 1
+        while iteration < max_iterations:
+            iteration += 1
 
-        try:
-            # Convert MCP tools to Converse API format
-            converse_tools = []
-            for tool in MCP_TOOLS:
-                converse_tools.append({
-                    "toolSpec": {
-                        "name": tool["name"],
-                        "description": tool["description"],
-                        "inputSchema": {"json": tool["input_schema"]}
-                    }
-                })
-
-            # Call LLM based on provider
             try:
-                if st.session_state.llm_provider in ('openai', 'nim'):
-                    response = call_openai_compatible(messages, converse_tools if converse_tools else None)
-                else:
-                    response = call_claude_via_cli(messages, converse_tools if converse_tools else None)
-            except Exception as llm_err:
-                print(f"LLM Error ({st.session_state.llm_provider}): {llm_err}", file=sys.stderr)
-                # Fallback to demo mode if LLM fails
-                return demo_mode_search(user_message)
+                # Convert MCP tools to Converse API format
+                converse_tools = []
+                for tool in MCP_TOOLS:
+                    converse_tools.append({
+                        "toolSpec": {
+                            "name": tool["name"],
+                            "description": tool["description"],
+                            "inputSchema": {"json": tool["input_schema"]}
+                        }
+                    })
 
-            # Process response
-            stop_reason = response.get('stopReason')
-            output_message = response.get('output', {}).get('message', {})
-            content = output_message.get('content', [])
+                # Call LLM based on provider
+                try:
+                    if st.session_state.llm_provider in ('openai', 'nim'):
+                        response = call_openai_compatible(messages, converse_tools if converse_tools else None)
+                    else:
+                        response = call_claude_via_cli(messages, converse_tools if converse_tools else None)
+                except Exception as llm_err:
+                    print(f"LLM Error ({st.session_state.llm_provider}): {llm_err}", file=sys.stderr)
+                    # Fallback to demo mode if LLM fails
+                    status.update(label="❌ LLM Error", state="error", expanded=False)
+                    return demo_mode_search(user_message)
 
-            # Add assistant response to messages
-            messages.append({"role": "assistant", "content": content})
+                # Process response
+                stop_reason = response.get('stopReason')
+                output_message = response.get('output', {}).get('message', {})
+                content = output_message.get('content', [])
 
-            # Handle tool use
-            if stop_reason == "tool_use":
-                status.write(f"🔧 Claude is calling tools... (iteration {iteration})")
+                # Add assistant response to messages
+                messages.append({"role": "assistant", "content": content})
 
-                # Convert Converse API format back to Messages API format for internal processing
-                messages_api_content = []
-                tool_results = []
+                # Handle tool use
+                if stop_reason == "tool_use":
+                    status.update(label=f"🔧 Claude is calling tools... (iteration {iteration})", state="running")
 
-                for block in content:
-                    if 'toolUse' in block:
-                        tool_use_block = block['toolUse']
-                        tool_name = tool_use_block['name']
-                        tool_input = tool_use_block['input']
-                        tool_use_id = tool_use_block['toolUseId']
+                    # Convert Converse API format back to Messages API format for internal processing
+                    messages_api_content = []
+                    tool_results = []
 
-                        status.write(f"⚙️ Executing: {tool_name}")
+                    for block in content:
+                        if 'toolUse' in block:
+                            tool_use_block = block['toolUse']
+                            tool_name = tool_use_block['name']
+                            tool_input = tool_use_block['input']
+                            tool_use_id = tool_use_block['toolUseId']
 
-                        # Execute the MCP tool
-                        result = execute_mcp_tool(tool_name, tool_input)
+                            status.write(f"⚙️ **Executing**: `{tool_name}`")
 
-                        # Log tool execution
-                        tool_execution_log.append({
-                            "iteration": iteration,
-                            "tool_name": tool_name,
-                            "tool_input": tool_input,
-                            "result_summary": str(result)[:200] + "..." if len(str(result)) > 200 else str(result),
-                            "full_result": result  # Store full result for entity extraction
-                        })
+                            # Execute the MCP tool
+                            result = execute_mcp_tool(tool_name, tool_input)
 
-                        # Render chart if applicable and track it (only for visualization tools)
-                        visualization_tools = ["plot_symptom_frequency", "plot_entity_distribution",
-                                             "plot_patient_timeline", "plot_entity_network", 
-                                             "visualize_graphrag_results", "search_medical_images"]
-                        if tool_name in visualization_tools:
-                            with chart_container:
-                                was_chart = render_chart(tool_name, result)
-                                if was_chart:
-                                    # Save chart data for re-rendering
-                                    rendered_charts.append({
-                                        "tool_name": tool_name,
-                                        "data": result
-                                    })
-
-                        # Store in Messages API format for next iteration
-                        messages_api_content.append({
-                            "type": "tool_use",
-                            "id": tool_use_id,
-                            "name": tool_name,
-                            "input": tool_input
-                        })
-
-                        # Add tool result
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": tool_use_id,
-                            "content": json.dumps(result)
-                        })
-                    elif 'text' in block:
-                        # Capture thinking/reasoning text
-                        thinking_text = block['text']
-                        if thinking_text.strip():
+                            # Log tool execution
                             tool_execution_log.append({
                                 "iteration": iteration,
-                                "type": "thinking",
-                                "content": thinking_text
+                                "tool_name": tool_name,
+                                "tool_input": tool_input,
+                                "result_summary": str(result)[:200] + "..." if len(str(result)) > 200 else str(result),
+                                "full_result": result  # Store full result for entity extraction
                             })
-                        messages_api_content.append({
-                            "type": "text",
-                            "text": thinking_text
-                        })
 
-                # Update last assistant message with Messages API format
-                if messages and messages[-1]["role"] == "assistant":
-                    messages[-1]["content"] = messages_api_content
+                            # Render chart if applicable and track it (only for visualization tools)
+                            visualization_tools = ["plot_symptom_frequency", "plot_entity_distribution",
+                                                 "plot_patient_timeline", "plot_entity_network", 
+                                                 "visualize_graphrag_results", "search_medical_images"]
+                            if tool_name in visualization_tools:
+                                with chart_container:
+                                    was_chart = render_chart(tool_name, result)
+                                    if was_chart:
+                                        # Save chart data for re-rendering
+                                        rendered_charts.append({
+                                            "tool_name": tool_name,
+                                            "data": result
+                                        })
 
-                # Add tool results to conversation
-                messages.append({"role": "user", "content": tool_results})
+                            # Store in Messages API format for next iteration
+                            messages_api_content.append({
+                                "type": "tool_use",
+                                "id": tool_use_id,
+                                "name": tool_name,
+                                "input": tool_input
+                            })
 
-            elif stop_reason == "end_turn":
-                # Claude is done - extract final text
-                status.empty()
-                final_text = ""
-                for block in content:
-                    if 'text' in block:
-                        final_text += block['text']
+                            # Add tool result
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": tool_use_id,
+                                "content": json.dumps(result)
+                            })
+                        elif 'text' in block:
+                            # Capture thinking/reasoning text
+                            thinking_text = block['text']
+                            if thinking_text.strip():
+                                status.write(f"💭 **Claude**: {thinking_text[:100]}...")
+                                tool_execution_log.append({
+                                    "iteration": iteration,
+                                    "type": "thinking",
+                                    "content": thinking_text
+                                })
+                            messages_api_content.append({
+                                "type": "text",
+                                "text": thinking_text
+                            })
 
-                with text_container:
-                    st.write(final_text)
+                    # Update last assistant message with Messages API format
+                    if messages and messages[-1]["role"] == "assistant":
+                        messages[-1]["content"] = messages_api_content
 
-                # Return text with chart data and execution log
-                result = {"text": final_text}
+                    # Add tool results to conversation
+                    messages.append({"role": "user", "content": tool_results})
 
-                if rendered_charts:
-                    result["chart_data"] = rendered_charts[0] if len(rendered_charts) == 1 else rendered_charts
+                elif stop_reason == "end_turn":
+                    # Claude is done - extract final text
+                    status.update(label="✅ Response complete", state="complete", expanded=False)
+                    final_text = ""
+                    for block in content:
+                        if 'text' in block:
+                            final_text += block['text']
 
-                if tool_execution_log:
-                    result["execution_log"] = tool_execution_log
+                    with text_container:
+                        st.write(final_text)
 
-                return result if len(result) > 1 else final_text
+                    # Return text with chart data and execution log
+                    result = {"text": final_text}
 
-            else:
-                status.empty()
-                return "Unexpected stop reason: " + stop_reason
+                    if rendered_charts:
+                        result["chart_data"] = rendered_charts[0] if len(rendered_charts) == 1 else rendered_charts
 
-        except Exception as e:
-            status.empty()
-            import traceback
-            error_msg = f"❌ Error: {str(e)}"
-            st.error(error_msg)
-            print(f"\n{'='*60}", file=sys.stderr)
-            print(f"EXCEPTION in chat_with_tools:", file=sys.stderr)
-            print(f"Error: {e}", file=sys.stderr)
-            print(f"Full traceback:\n{traceback.format_exc()}", file=sys.stderr)
-            print(f"{'='*60}\n", file=sys.stderr)
-            return error_msg
+                    if tool_execution_log:
+                        result["execution_log"] = tool_execution_log
+
+                    return result if len(result) > 1 else final_text
+
+                else:
+                    status.update(label="⚠️ Unexpected stop", state="error")
+                    return "Unexpected stop reason: " + stop_reason
+
+            except Exception as e:
+                status.update(label="❌ Error", state="error")
+                import traceback
+                error_msg = f"❌ Error: {str(e)}"
+                st.error(error_msg)
+                print(f"\n{'='*60}", file=sys.stderr)
+                print(f"EXCEPTION in chat_with_tools:", file=sys.stderr)
+                print(f"Error: {e}", file=sys.stderr)
+                print(f"Full traceback:\n{traceback.format_exc()}", file=sys.stderr)
+                print(f"{'='*60}\n", file=sys.stderr)
+                return error_msg
+
+        # Max iterations reached - return what we have so far
+        status.update(label="⚠️ Maximum iterations reached", state="error")
+        error_msg = f"⚠️ Query exceeded maximum iterations ({max_iterations}). Claude called too many tools without completing. This may indicate the query is too complex or ambiguous."
+
+        result = {"text": error_msg}
+        if tool_execution_log:
+            result["execution_log"] = tool_execution_log
+
+        return result
 
     # Max iterations reached - return what we have so far
     status.empty()

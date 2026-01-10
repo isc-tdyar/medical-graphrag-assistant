@@ -81,8 +81,6 @@ def get_memory():
     return vector_memory
 
 
-
-
 @server.list_tools()
 async def list_tools() -> List[Tool]:
     """List all available tools."""
@@ -1069,7 +1067,6 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
         elif name == "search_medical_images":
             query = arguments["query"]
             limit = arguments.get("limit", 5)
-            min_score = arguments.get("min_score", 0.0)  # New: score threshold filter
 
             emb = get_embedder()
             results = []
@@ -1775,6 +1772,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
 
 async def main():
     """Run the MCP server."""
+    from mcp.server.stdio import stdio_server
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,

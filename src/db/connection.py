@@ -6,6 +6,8 @@ for local Docker IRIS instance (used on EC2 deployment).
 """
 
 import os
+import sys
+import time
 from typing import Optional
 try:
     from dotenv import load_dotenv
@@ -71,7 +73,7 @@ class DatabaseConnection:
     @classmethod
     def get_connection(cls, **kwargs):
         """
-        Create IRIS database connection.
+        Create IRIS database connection with retries.
         
         Args:
             **kwargs: Optional overrides for connection parameters (hostname, port, etc.)
@@ -80,7 +82,7 @@ class DatabaseConnection:
             DBAPI connection object
             
         Raises:
-            Exception: If connection fails
+            ConnectionError: If all connection attempts fail
         """
         config = cls.get_config()
         # Only override with non-None kwargs
@@ -88,32 +90,46 @@ class DatabaseConnection:
             if v is not None:
                 config[k] = v
         
-        try:
-            import iris
-            # Try standard import first
-            if hasattr(iris, 'connect'):
-                return iris.connect(**config)
-            
-            # Fallback to irissdk if iris.connect is missing
-            # (Common issue with intersystems-irispython on some platforms)
-            import iris.irissdk
-            conn = iris.irissdk.IRISConnection()
-            # Use _connect as connect() is not exposed in some versions
-            conn._connect(
-                config['hostname'], 
-                config['port'], 
-                config['namespace'], 
-                config['username'], 
-                config['password']
-            )
-            return conn
+        max_retries = 3
+        retry_delay = 1
+        
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                import iris
+                # Try standard import first
+                if hasattr(iris, 'connect'):
+                    return iris.connect(**config)
+                
+                # Fallback to irissdk if iris.connect is missing
+                # (Common issue with intersystems-irispython on some platforms)
+                import iris.irissdk
+                conn = iris.irissdk.IRISConnection()
+                # Use _connect as connect() is not exposed in some versions
+                conn._connect(
+                    config['hostname'], 
+                    config['port'], 
+                    config['namespace'], 
+                    config['username'], 
+                    config['password']
+                )
+                return conn
 
-        except Exception as e:
-            # Add context to error message
-            raise ConnectionError(
-                f"Failed to connect to IRIS at {config['hostname']}:{config['port']}/{config['namespace']}. "
-                f"Error: {str(e)}"
-            ) from e
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    print(f"Warning: IRIS connection attempt {attempt+1} failed ({e}). Retrying in {retry_delay}s...", file=sys.stderr)
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    # Final attempt failed
+                    break
+        
+        # Add context to error message
+        raise ConnectionError(
+            f"Failed to connect to IRIS at {config['hostname']}:{config['port']}/{config['namespace']} after {max_retries} attempts. "
+            f"Error: {str(last_error)}"
+        )
     
     @classmethod
     def is_local(cls) -> bool:

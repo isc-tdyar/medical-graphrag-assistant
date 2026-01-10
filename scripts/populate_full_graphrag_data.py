@@ -70,6 +70,8 @@ CONDITIONS = [
     ("hyperlipidemia", "Condition", ["atorvastatin", "rosuvastatin", "elevated cholesterol", "elevated LDL"]),
     ("obesity", "Condition", ["diet modification", "exercise program", "elevated BMI", "metabolic syndrome"]),
     ("sleep apnea", "Condition", ["CPAP therapy", "snoring", "daytime sleepiness", "fatigue"]),
+    ("seasonal allergies", "Condition", ["loratadine", "cetirizine", "sneezing", "rhinitis", "itchy eyes"]),
+    ("penicillin allergy", "Condition", ["hives", "rash", "anaphylaxis risk", "avoid penicillin"]),
 ]
 
 IMAGING_FINDINGS = [
