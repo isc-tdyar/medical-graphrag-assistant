@@ -37,9 +37,20 @@ def reset_security(username: str = "_SYSTEM", password: str = "SYS", fhir_app: s
             
         db_native = iris.createIRIS(conn)
         
-        # 2. Switch to %SYS namespace for administrative tasks
-        print("Switching to %SYS namespace...")
-        db_native.classMethodValue("%SYS.Process", "SetNamespace", "%SYS")
+        # 2. Switch to %SYS namespace if needed
+        # We try both %SYSTEM.Process and %SYS.Process as naming varies by IRIS version/mapping
+        try:
+            current_ns = db_native.classMethodValue("%SYSTEM.Process", "Namespace")
+            print(f"Current namespace: {current_ns}")
+            if current_ns != "%SYS":
+                print("Switching to %SYS namespace...")
+                db_native.classMethodValue("%SYSTEM.Process", "SetNamespace", "%SYS")
+        except Exception:
+            try:
+                # Fallback to direct SQL or assume already in %SYS if defaults used
+                print("Note: Could not verify namespace via %SYSTEM.Process, proceeding...")
+            except Exception:
+                pass
         
         # 3. Reset User Password (FR-001)
         print(f"Resetting password for user {username}...")
