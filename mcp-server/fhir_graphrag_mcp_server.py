@@ -1598,8 +1598,14 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
 
             adapter = FHIRRadiologyAdapter()
 
-            # Strategy: Search ImagingStudy resources and extract unique patients
+            fhir_base_url = os.getenv("FHIR_BASE_URL")
+            if fhir_base_url:
+                adapter = FHIRRadiologyAdapter(fhir_base_url=fhir_base_url)
+            else:
+                adapter = FHIRRadiologyAdapter()
+            
             search_url = f"{adapter.fhir_base_url}/ImagingStudy"
+
             params = {"_count": limit * 3}  # Fetch more to get unique patients
 
             if modality:
