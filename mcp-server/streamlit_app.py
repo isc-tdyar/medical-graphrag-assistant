@@ -1421,29 +1421,29 @@ def render_chart(tool_name: str, data, unique_id: str = None):
 
                     # Build caption with score badge - style patient differently if linked vs unlinked
                     patient_style = "color: #28a745;" if patient_linked else "color: #dc3545; font-style: italic;"
-                    caption_html = f"""
-                    <div style='text-align: center; margin-bottom: 8px;'>
-                        <strong>{study_type}</strong><br/>
-                        <small style='{patient_style}'>{patient_display}</small><br/>
-                        <small style='color: #666;'>ID: {image_id[:8]}...</small>
-                    </div>
-                    """
+                    caption_html = (
+                        f"<div style='text-align: center; margin-bottom: 8px;'>"
+                        f"<strong>{study_type}</strong><br/>"
+                        f"<small style='{patient_style}'>{patient_display}</small><br/>"
+                        f"<small style='color: #666;'>ID: {image_id[:8]}...</small>"
+                        f"</div>"
+                    )
                     
                     # Add score badge if available
                     if similarity_score is not None:
-                        caption_html += f"""
-                        <div style='
-                            background-color: {hex_color}; 
-                            color: white;  
-                            padding: 6px 12px; 
-                            border-radius: 4px; 
-                            text-align: center;
-                            font-weight: bold;
-                            margin-top: 4px;
-                        '>
-                            Score: {similarity_score:.2f} ({confidence_level})
-                        </div>
-                        """
+                        caption_html += (
+                            f"<div style='"
+                            f"background-color: {hex_color}; "
+                            f"color: white; "
+                            f"padding: 6px 12px; "
+                            f"border-radius: 4px; "
+                            f"text-align: center; "
+                            f"font-weight: bold; "
+                            f"margin-top: 4px;"
+                            f"'>"
+                            f"Score: {similarity_score:.2f} ({confidence_level})"
+                            f"</div>"
+                        )
                     
                     # Display caption with HTML
                     st.markdown(caption_html, unsafe_allow_html=True)
@@ -1814,9 +1814,16 @@ def chat_with_tools(user_message: str):
     if any(kw in user_message_lower for kw in ["allergy", "allerrgies", "allergies"]):
         user_message = user_message + "\n\n[REASONING HINT: User is asking for allergies. Search BOTH FHIR documents and the knowledge graph to be thorough. Use search_fhir_documents and search_knowledge_graph.]"
 
-    # Build conversation history from session state, converting to simple format for API
+    # Build conversation history from session state
+    # TRUNCATION: Keep only last 10 messages to avoid token limit overflow (8192 for NIM)
+    MAX_HISTORY = 10
+    raw_history = st.session_state.messages
+    if len(raw_history) > MAX_HISTORY:
+        # Always keep the very first message if it's important, but usually last N is better
+        raw_history = raw_history[-MAX_HISTORY:]
+
     messages = []
-    for msg in st.session_state.messages:
+    for msg in raw_history:
         # Skip malformed messages
         if not isinstance(msg, dict) or "role" not in msg:
             continue
