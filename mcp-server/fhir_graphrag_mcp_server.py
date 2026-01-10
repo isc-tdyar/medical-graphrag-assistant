@@ -1140,11 +1140,6 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     # Semantic search returns 8 columns (including similarity + patient info)
                     image_id, study_id, subject_id, view_pos, image_path, similarity, fhir_patient_id, fhir_patient_name = row
                     similarity_score = float(similarity) if similarity is not None else 0.0
-
-                    # Filter by min_score if specified
-                    if similarity_score < min_score:
-                        continue
-
                     scores.append(similarity_score)
 
                     # Build patient display name - use linked name or show as unlinked (T016)
