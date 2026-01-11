@@ -176,9 +176,10 @@ This project optimizes for cost and performance using model tiering:
 8. **Documentation**: Keep `STATUS.md` and `PROGRESS.md` updated as you complete major features or milestones.
 
 ## Recent Changes
+- 011-reset-fhir-security: Added Python 3.11+ + `intersystems-irispython`, `requests`
 - 009-full-ux-tests: Added Python 3.11 + Playwright, pytest, pytest-playwright, requests, intersystems-irispython
 - 009-full-ux-tests: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 
 ## Active Technologies
-- Python 3.11 + Playwright, pytest, pytest-playwright, requests, intersystems-irispython (009-full-ux-tests)
-- InterSystems IRIS (Target environment validation) (009-full-ux-tests)
+- Python 3.11+ + `intersystems-irispython`, `requests` (011-reset-fhir-security)
+- InterSystems IRIS (System Configuration) (011-reset-fhir-security)

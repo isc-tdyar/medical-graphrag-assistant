@@ -66,7 +66,11 @@ function stop_streamlit() {
 function start_streamlit() {
     echo "=== Starting Streamlit ==="
     $SSH_CMD "
-    cd ~/medical-graphrag-assistant/mcp-server
+    cd ~/medical-graphrag-assistant
+    if [ -f .env ]; then
+        source .env
+    fi
+    cd mcp-server
     source ~/medical-graphrag/venv/bin/activate
     export NVCLIP_BASE_URL=http://localhost:8002/v1
     nohup streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 > ~/streamlit.log 2>&1 &

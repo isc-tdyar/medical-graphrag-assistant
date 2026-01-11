@@ -5,36 +5,14 @@ Provides LRU (Least Recently Used) caching for NV-CLIP text embeddings
 to improve search performance by avoiding redundant API calls.
 """
 
+import sys
+import os
 from functools import lru_cache
 from typing import Tuple
-import sys
 
-
-# Import embedder getter from MCP server
-# Note: This creates a circular dependency that we handle carefully
-def get_embedder():
-    """
-    Get NV-CLIP embedder instance.
-    
-    Imports from fhir_graphrag_mcp_server to get the global embedder.
-    Returns None if embedder is not available.
-    """
-    try:
-        # Add mcp-server to path if not already there
-        import os
-        mcp_path = os.path.join(os.path.dirname(__file__), '../../mcp-server')
-        if mcp_path not in sys.path:
-            sys.path.insert(0, mcp_path)
-        
-        from fhir_graphrag_mcp_server import get_embedder as _get_embedder
-        return _get_embedder()
-    except (ImportError, AttributeError):
-        # Fall back to creating embedder directly
-        try:
-            from src.embeddings.nvclip_embeddings import NVCLIPEmbeddings
-            return NVCLIPEmbeddings()
-        except Exception:
-            return None
+# Import embedder singleton
+# Breaks circular dependency with MCP server
+from src.embeddings.embedder_singleton import get_embedder
 
 
 @lru_cache(maxsize=1000)
@@ -61,21 +39,6 @@ def get_cached_embedding(query_text: str) -> Tuple[float, ...]:
     Raises:
         AttributeError: If embedder is None
         TypeError: If embedder.embed_text fails
-        
-    Example:
-        >>> # First call - cache miss, calls NV-CLIP API
-        >>> emb1 = get_cached_embedding("chest X-ray showing pneumonia")
-        >>> 
-        >>> # Second call - cache hit, returns instantly
-        >>> emb2 = get_cached_embedding("chest X-ray showing pneumonia")
-        >>> 
-        >>> assert emb1 == emb2  # Same result
-        >>> assert emb1 is emb2  # Same object (cached)
-        
-    Performance:
-        - Cache miss: 500-2000ms (NV-CLIP API call)
-        - Cache hit: <1ms (memory lookup)
-        - Speedup: 500-2000x for cached queries
     """
     embedder = get_embedder()
     
@@ -108,11 +71,6 @@ def cache_info():
     
     Returns:
         CacheInfo: Named tuple with cache statistics
-        
-    Example:
-        >>> info = cache_info()
-        >>> print(f"Hit rate: {info.hits / (info.hits + info.misses):.2%}")
-        >>> print(f"Cache usage: {info.currsize}/{info.maxsize}")
     """
     return get_cached_embedding.cache_info()
 
@@ -120,23 +78,6 @@ def cache_info():
 def clear_cache():
     """
     Clear all cached embeddings and reset statistics.
-    
-    This resets:
-    - All cached query→embedding mappings
-    - Hit/miss counters
-    - Current size counter
-    
-    Use this:
-    - Before running tests (to ensure clean state)
-    - When switching environments (dev→prod)
-    - When RAM usage needs to be reduced
-    
-    Example:
-        >>> clear_cache()
-        >>> info = cache_info()
-        >>> assert info.currsize == 0
-        >>> assert info.hits == 0
-        >>> assert info.misses == 0
     """
     get_cached_embedding.cache_clear()
 
@@ -144,23 +85,6 @@ def clear_cache():
 class EmbeddingCache:
     """
     Static wrapper class for embedding cache operations.
-    
-    Provides object-oriented interface to the @lru_cache-decorated
-    get_cached_embedding function. This class exists for better
-    organization and discoverability.
-    
-    All methods are static/class methods since caching is global.
-    
-    Example:
-        >>> # Using class interface
-        >>> embedding = EmbeddingCache.get(query)
-        >>> stats = EmbeddingCache.info()
-        >>> EmbeddingCache.clear()
-        >>> 
-        >>> # Or using module-level functions directly
-        >>> embedding = get_cached_embedding(query)
-        >>> stats = cache_info()
-        >>> clear_cache()
     """
     
     @staticmethod
@@ -207,10 +131,6 @@ class EmbeddingCache:
         Returns:
             float: Hit rate from 0.0 to 1.0
                    Returns 0.0 if no queries cached yet
-                   
-        Example:
-            >>> rate = EmbeddingCache.hit_rate()
-            >>> print(f"Cache hit rate: {rate:.1%}")
         """
         info = cache_info()
         total = info.hits + info.misses
@@ -282,7 +202,6 @@ if __name__ == '__main__':
             
         except Exception as e:
             print(f"  Error: {e}")
-            print("  (This is expected if NVIDIA_API_KEY not set)")
     
     print("\n" + "=" * 50)
     print("Final cache statistics:")
