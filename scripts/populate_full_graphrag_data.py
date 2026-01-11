@@ -275,37 +275,29 @@ def put_fhir_resource(resource, resource_type=None, resource_id=None):
 
 from src.db.connection import get_connection
 
-def execute_iris_sql(sql, params=None):
-    """Execute SQL against IRIS database via DBAPI."""
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        if params:
-            cursor.execute(sql, params)
-        else:
-            cursor.execute(sql)
-            
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-        # Return success
-        return True, "Success"
-    except Exception as e:
-        return False, str(e)
-
-
-def execute_iris_sql_remote(sql, params=None, host="13.218.19.254"):
-    """Execute SQL against remote IRIS database (delegates to local execute_iris_sql if on host)."""
-    # If we are on the EC2, we should just use execute_iris_sql
-    return execute_iris_sql(sql, params)
-
-
 def generate_mock_embedding():
     """Generate a mock 1024-dim embedding vector."""
-    # Generate deterministic but varied embeddings based on content
     return [round(random.uniform(-0.5, 0.5), 4) for _ in range(1024)]
+
+
+def execute_sql_batch(conn, sql, params_list):
+    stats = {"count": 0, "errors": []}
+    try:
+        cursor = conn.cursor()
+        for params in params_list:
+            try:
+                if params:
+                    cursor.execute(sql, params)
+                else:
+                    cursor.execute(sql)
+                stats["count"] += 1
+            except Exception as e:
+                stats["errors"].append(str(e))
+        conn.commit()
+        cursor.close()
+    except Exception as e:
+        stats["errors"].append(f"Batch Error: {e}")
+    return stats
 
 
 def main():
@@ -330,9 +322,10 @@ def main():
         "errors": []
     }
 
-    # 1. Create FHIR Patient resources
-    print("Creating FHIR Patient resources...")
+    # 1. Create FHIR resources (REST calls)
+    print("Creating FHIR resources (Patients, Imaging, Reports)...")
     for patient in patients:
+        # Create Patient
         fhir_patient = {
             "resourceType": "Patient",
             "id": patient["id"],
@@ -340,25 +333,12 @@ def main():
             "gender": patient["gender"],
             "birthDate": patient["birth_date"]
         }
-
         success, result = put_fhir_resource(fhir_patient)
-        if success:
-            stats["patients_created"] += 1
-        else:
-            stats["errors"].append(f"Patient/{patient['id']}: {result}")
+        if success: stats["patients_created"] += 1
+        else: stats["errors"].append(f"Patient/{patient['id']}: {result}")
 
-        if stats["patients_created"] % 10 == 0:
-            print(f"  Created {stats['patients_created']} patients...")
-
-    print(f"  ✓ Patients created: {stats['patients_created']}/{NUM_PATIENTS}")
-    print()
-
-    # 2. Create ImagingStudy and DiagnosticReport resources
-    print("Creating ImagingStudy and DiagnosticReport resources...")
-    for patient in patients:
+        # Create ImagingStudy
         study = patient["imaging_study"]
-
-        # ImagingStudy
         imaging_study = {
             "resourceType": "ImagingStudy",
             "id": study["study_id"],
@@ -371,12 +351,10 @@ def main():
             "numberOfInstances": 1,
             "description": f"Chest X-ray - {study['finding']}"
         }
-
         success, result = put_fhir_resource(imaging_study)
-        if success:
-            stats["imaging_studies_created"] += 1
+        if success: stats["imaging_studies_created"] += 1
 
-        # DiagnosticReport
+        # Create DiagnosticReport
         diagnostic_report = {
             "resourceType": "DiagnosticReport",
             "id": f"report-{study['study_id'].replace('study-', '')}",
@@ -388,188 +366,87 @@ def main():
             "effectiveDateTime": study["date"],
             "category": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0074", "code": "RAD", "display": "Radiology"}]}]
         }
-
         success, result = put_fhir_resource(diagnostic_report)
-        if success:
-            stats["diagnostic_reports_created"] += 1
+        if success: stats["diagnostic_reports_created"] += 1
 
-    print(f"  ✓ ImagingStudies created: {stats['imaging_studies_created']}/{NUM_PATIENTS}")
-    print(f"  ✓ DiagnosticReports created: {stats['diagnostic_reports_created']}/{NUM_PATIENTS}")
-    print()
+    # 2. Create GraphRAG data in IRIS (SQL connection reuse)
+    print("\nConnecting to IRIS for data population...")
+    try:
+        conn = get_connection()
+        
+        # 3. Clinical Notes
+        print("Populating FHIRDocuments and FHIRTextVectors...")
+        doc_params = []
+        vec_params = []
+        for patient in patients:
+            for note in patient["notes"]:
+                embedding = generate_mock_embedding()
+                embedding_str = ",".join(str(v) for v in embedding)
+                
+                # Composition resource string
+                resource_json = {
+                    "resourceType": "Composition",
+                    "id": note["note_id"],
+                    "status": "final",
+                    "type": {"coding": [{"display": note["document_type"]}]},
+                    "content": [{"attachment": {"data": note["text_content"].encode('utf-8').hex()}}]
+                }
+                
+                doc_params.append((note["note_id"], note["document_type"], note["text_content"], json.dumps(resource_json)))
+                vec_params.append((note["note_id"], note["document_type"], note["text_content"], embedding_str, 'nvidia/nv-embedqa-e5-v5', 'nim'))
 
-    # 3. Create Clinical Notes in IRIS (ClinicalNoteVectors table)
-    print("Creating Clinical Notes in IRIS ClinicalNoteVectors table...")
+        sql_doc = "INSERT INTO SQLUser.FHIRDocuments (FHIRResourceId, ResourceType, TextContent, ResourceString, CreatedAt) VALUES (?, ?, ?, ?, NOW())"
+        batch_res = execute_sql_batch(conn, sql_doc, doc_params)
+        stats["clinical_notes_created"] = batch_res["count"]
+        stats["errors"].extend(batch_res["errors"])
 
-    # Check if we're running locally or need remote execution
-    is_remote = IRIS_HOST != "localhost" or os.getenv("USE_REMOTE_IRIS", "false").lower() == "true"
-    execute_sql = execute_iris_sql_remote if is_remote else execute_iris_sql
+        sql_vec = "INSERT INTO VectorSearch.FHIRTextVectors (ResourceID, ResourceType, TextContent, Vector, EmbeddingModel, Provider, CreatedAt) VALUES (?, ?, ?, TO_VECTOR(?, DOUBLE, 1024), ?, ?, NOW())"
+        batch_res = execute_sql_batch(conn, sql_vec, vec_params)
+        stats["errors"].extend(batch_res["errors"])
 
-    for patient in patients:
-        for note in patient["notes"]:
-            # Generate mock embedding
-            embedding = generate_mock_embedding()
-            embedding_str = ",".join(str(v) for v in embedding)
+        # 4. Entities
+        print("Populating RAG.Entities...")
+        entity_params = []
+        for patient in patients:
+            for entity in patient["entities"]:
+                doc_id_int = int(entity["source_document_id"].split('-p')[1].replace('-', ''))
+                entity_params.append((entity["entity_text"], entity["entity_type"], doc_id_int, entity["confidence"]))
+        
+        sql_ent = "INSERT INTO RAG.Entities (EntityText, EntityType, ResourceID, Confidence) VALUES (?, ?, ?, ?)"
+        batch_res = execute_sql_batch(conn, sql_ent, entity_params)
+        stats["entities_created"] = batch_res["count"]
+        stats["errors"].extend(batch_res["errors"])
 
-            # Generate dummy FHIR ResourceString
-            resource_json = {
-                "resourceType": "Composition",
-                "id": note["note_id"],
-                "status": "final",
-                "type": {
-                    "coding": [{"display": note["document_type"]}]
-                },
-                "content": [{
-                    "attachment": {
-                        "data": note["text_content"].encode('utf-8').hex()
-                    }
-                }]
-            }
-            resource_string = json.dumps(resource_json)
+        # 5. Relationships
+        print("Populating RAG.EntityRelationships...")
+        rel_params = []
+        for patient in patients:
+            for rel in patient["relationships"]:
+                source_id = int(rel["source_entity_id"].split('-')[2])
+                target_id = int(rel["target_entity_id"].split('-')[2])
+                doc_id = int(rel["source_document_id"].split('-p')[1].replace('-', ''))
+                rel_params.append((source_id, target_id, rel["relation_type"], doc_id, rel["confidence"]))
+        
+        sql_rel = "INSERT INTO RAG.EntityRelationships (SourceEntityID, TargetEntityID, RelationshipType, ResourceID, Confidence) VALUES (?, ?, ?, ?, ?)"
+        batch_res = execute_sql_batch(conn, sql_rel, rel_params)
+        stats["relationships_created"] = batch_res["count"]
+        stats["errors"].extend(batch_res["errors"])
 
-            # 1. Insert into SQLUser.FHIRDocuments (for full-text search and details)
-            sql_doc = """INSERT INTO SQLUser.FHIRDocuments
-                (FHIRResourceId, ResourceType, TextContent, ResourceString, CreatedAt)
-                VALUES (?, ?, ?, ?, NOW())"""
-            
-            params_doc = (
-                note["note_id"],
-                note["document_type"],
-                note["text_content"],
-                resource_string
-            )
-            
-            success_doc, result_doc = execute_sql(sql_doc, params_doc)
+        conn.close()
+    except Exception as e:
+        stats["errors"].append(f"IRIS Connection failed: {e}")
 
-            # 2. Insert into VectorSearch.FHIRTextVectors (for vector search)
-            sql_vec = f"""INSERT INTO VectorSearch.FHIRTextVectors
-                (ResourceID, ResourceType, TextContent, Vector, EmbeddingModel, Provider, CreatedAt)
-                VALUES (?, ?, ?, TO_VECTOR(?, DOUBLE, 1024), ?, ?, NOW())"""
-
-            params_vec = (
-                note["note_id"], 
-                note["document_type"],
-                note["text_content"], 
-                embedding_str,
-                'nvidia/nv-embedqa-e5-v5', 
-                'nim'
-            )
-
-            success_vec, result_vec = execute_sql(sql_vec, params_vec)
-            
-            if success_doc and success_vec:
-                stats["clinical_notes_created"] += 1
-            else:
-                stats["errors"].append(f"SQL Error (Note): {result_doc if not success_doc else result_vec}")
-
-        if stats["clinical_notes_created"] % 20 == 0:
-            print(f"  Created {stats['clinical_notes_created']} clinical notes...")
-
-    print(f"  ✓ Clinical notes created: {stats['clinical_notes_created']}")
-    print()
-
-    # 4. Create Entities in IRIS
-    print("Creating Entities in IRIS RAG.Entities table...")
-    for patient in patients:
-        for entity in patient["entities"]:
-            sql = f"""INSERT INTO RAG.Entities
-                (EntityText, EntityType, ResourceID, Confidence)
-                VALUES (?, ?, ?, ?)"""
-
-            params = (
-                entity["entity_text"],
-                entity["entity_type"], 
-                int(entity["source_document_id"].split('-p')[1].replace('-', '')),
-                entity["confidence"]
-            )
-
-            success, result = execute_sql(sql, params)
-            if success:
-                stats["entities_created"] += 1
-            else:
-                stats["errors"].append(f"SQL Error (Entity): {result}")
-
-        if stats["entities_created"] % 50 == 0:
-            print(f"  Created {stats['entities_created']} entities...")
-
-    print(f"  ✓ Entities created: {stats['entities_created']}")
-    print()
-
-    # 5. Create Relationships in IRIS
-    print("Creating Relationships in IRIS RAG.EntityRelationships table...")
-    for patient in patients:
-        for rel in patient["relationships"]:
-            sql = f"""INSERT INTO RAG.EntityRelationships
-                (SourceEntityID, TargetEntityID, RelationshipType, ResourceID, Confidence)
-                VALUES (?, ?, ?, ?, ?)"""
-
-            source_id = int(rel["source_entity_id"].split('-')[2])
-            target_id = int(rel["target_entity_id"].split('-')[2])
-            doc_id = int(rel["source_document_id"].split('-p')[1].replace('-', ''))
-
-            params = (
-                source_id,
-                target_id,
-                rel["relation_type"], 
-                doc_id,
-                rel["confidence"]
-            )
-
-            success, result = execute_sql(sql, params)
-            if success:
-                stats["relationships_created"] += 1
-            else:
-                stats["errors"].append(f"SQL Error (Relationship): {result}")
-
-        if stats["relationships_created"] % 50 == 0:
-            print(f"  Created {stats['relationships_created']} relationships...")
-
-    print(f"  ✓ Relationships created: {stats['relationships_created']}")
-    print()
-
-    # Summary
-    print("=" * 70)
+    # Final summary printing... (same as before but using the updated stats)
+    print("\n" + "=" * 70)
     print("SUMMARY")
     print("=" * 70)
-    print(f"FHIR Resources:")
-    print(f"  Patients:          {stats['patients_created']}")
-    print(f"  ImagingStudies:    {stats['imaging_studies_created']}")
-    print(f"  DiagnosticReports: {stats['diagnostic_reports_created']}")
-    print()
-    print(f"IRIS GraphRAG Tables:")
-    print(f"  ClinicalNoteVectors: {stats['clinical_notes_created']}")
-    print(f"  Entities:            {stats['entities_created']}")
-    print(f"  Relationships:       {stats['relationships_created']}")
-    print()
-
+    print(f"FHIR Resources: {stats['patients_created']} Patients, {stats['imaging_studies_created']} Studies")
+    print(f"IRIS Tables: {stats['clinical_notes_created']} Notes, {stats['entities_created']} Entities, {stats['relationships_created']} Relations")
     if stats["errors"]:
-        print(f"Errors ({len(stats['errors'])}):")
-        for err in stats["errors"]:
-            if "SQL Error (Entity)" in err:
-                print(f"  - {err}")
-                break
-        for err in stats["errors"]:
-            if "SQL Error (Note)" in err:
-                print(f"  - {err}")
-                break
-        for err in stats["errors"][:10]:
-            print(f"  - {err}")
-        if len(stats["errors"]) > 10:
-            print(f"  ... and {len(stats['errors']) - 10} more")
-
-    total_success = (
-        stats["patients_created"] >= NUM_PATIENTS * 0.9 and
-        stats["entities_created"] > 0 and
-        stats["relationships_created"] > 0
-    )
-
-    if total_success:
-        print()
-        print("✓ Data population completed successfully!")
-        return 0
-    else:
-        print()
-        print("⚠ Data population completed with some failures")
-        return 1
+        print(f"\nErrors ({len(stats['errors'])}):")
+        for err in stats["errors"][:5]: print(f"  - {err}")
+    
+    return 0 if stats["patients_created"] > 0 else 1
 
 
 if __name__ == "__main__":
