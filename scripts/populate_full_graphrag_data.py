@@ -373,7 +373,24 @@ def main():
     print("\nConnecting to IRIS for data population...")
     try:
         conn = get_connection()
+        cursor = conn.cursor()
         
+        # Cleanup existing data to avoid UNIQUE constraint errors
+        print("Cleaning up existing data...")
+        tables_to_clean = [
+            "SQLUser.FHIRDocuments", 
+            "VectorSearch.FHIRTextVectors",
+            "RAG.Entities",
+            "RAG.EntityRelationships"
+        ]
+        for table in tables_to_clean:
+            try:
+                cursor.execute(f"DELETE FROM {table}")
+            except Exception as e:
+                print(f"Warning: Could not clean {table}: {e}")
+        conn.commit()
+        cursor.close()
+
         # 3. Clinical Notes
         print("Populating FHIRDocuments and FHIRTextVectors...")
         doc_params = []
