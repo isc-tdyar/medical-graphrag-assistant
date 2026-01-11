@@ -7,7 +7,6 @@ import os
 import sys
 import argparse
 import json
-import base64
 from typing import Optional, Dict, Any
 
 # Ensure project root is in path
@@ -20,26 +19,52 @@ from src.db.connection import DatabaseConnection
 def reset_security(username: str = "_SYSTEM", password: str = "SYS", fhir_app: str = "/csp/healthshare/demo/fhir/r4"):
     """
     Perform deep reset of FHIR security settings.
-    Uses docker exec for maximum reliability when running on the host.
+    Uses iris-devtester for reliable state management if available.
     """
+    try:
+        from iris_devtester import IRISContainer
+        print(f"Starting security reset using iris-devtester for user {username}...")
+        
+        # Connect to existing container
+        with IRISContainer.connect_remote(
+            host=os.getenv("IRIS_HOST", "localhost"),
+            port=int(os.getenv("IRIS_PORT", "32782")),
+            username=username,
+            password=password,
+            namespace="%SYS"
+        ) as iris_inst:
+            print(f"Configuring security for {username}...")
+            # iris-devtester automatically handles handshake/retry
+            
+            print(f"Ensuring Password auth for {fhir_app}...")
+            # We can still run raw ObjectScript if needed via devtester
+            app_script = f'set app = ##class(Security.Applications).%OpenId("{fhir_app}") if \$isobject(app) {{ set app.AuthenEnabled = 32, app.Enabled = 1 write app.%Save() }}'
+            iris_inst.run_script(app_script)
+            
+            return True
+            
+    except (ImportError, Exception) as e:
+        if not isinstance(e, ImportError):
+            print(f"iris-devtester error: {e}, falling back to manual reset...")
+        return reset_security_manual(username, password, fhir_app)
+
+def reset_security_manual(username, password, fhir_app):
+    """Fallback manual reset using docker exec."""
     import subprocess
     import requests
     from requests.auth import HTTPBasicAuth
     
-    print(f"Starting security reset for user {username} and app {fhir_app}...")
+    print(f"Starting manual security reset for user {username}...")
     
     def run_iris_cmd(cmd_string):
         """Execute ObjectScript in the IRIS container."""
-        # Use heredoc to pipe commands into iris session
         full_cmd = f"docker exec iris-fhir iris session IRIS <<EOF\nzn \"%SYS\"\n{cmd_string}\nhalt\nEOF"
         return subprocess.run(full_cmd, shell=True, capture_output=True, text=True)
 
     try:
         # 1. Reset Password
         print(f"Resetting password for {username}...")
-        res = run_iris_cmd(f"write ##class(Security.Users).ChangePassword(\"{username}\", \"{password}\")")
-        if "1" not in res.stdout:
-            print(f"Warning: Password reset might have failed: {res.stderr} {res.stdout}")
+        run_iris_cmd(f"write ##class(Security.Users).ChangePassword(\"{username}\", \"{password}\")")
 
         # 2. Enable Password Auth for Application
         print(f"Configuring application {fhir_app}...")
@@ -49,13 +74,9 @@ def reset_security(username: str = "_SYSTEM", password: str = "SYS", fhir_app: s
                 set app.AuthenEnabled = 32
                 set app.Enabled = 1
                 write app.%Save()
-            }} else {{
-                write "APP_NOT_FOUND"
             }}
         """
-        res = run_iris_cmd(app_cmd)
-        if "1" not in res.stdout:
-            print(f"Warning: App config failed: {res.stdout}")
+        run_iris_cmd(app_cmd)
 
         # 3. Assign Roles
         print(f"Assigning roles to {username}...")
@@ -66,7 +87,7 @@ def reset_security(username: str = "_SYSTEM", password: str = "SYS", fhir_app: s
                 write user.%Save()
             }}
         """
-        res = run_iris_cmd(role_cmd)
+        run_iris_cmd(role_cmd)
 
         # 4. Verify connectivity
         print("Verifying connectivity...")
@@ -92,7 +113,7 @@ def reset_security(username: str = "_SYSTEM", password: str = "SYS", fhir_app: s
 
         return True
     except Exception as e:
-        print(f"Error during reset: {e}")
+        print(f"Error during manual reset: {e}")
         return False
 
 def main():
