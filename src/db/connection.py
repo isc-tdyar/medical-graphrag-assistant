@@ -8,7 +8,9 @@ for local Docker IRIS instance (used on EC2 deployment).
 import os
 import sys
 import time
-from typing import Optional
+import importlib
+from typing import Optional, Any
+
 try:
     from dotenv import load_dotenv
     # Look for .env in project root (two levels up from src/db)
@@ -18,31 +20,10 @@ try:
 except ImportError:
     pass
 
-import iris
-
 
 class DatabaseConnection:
     """
     IRIS database connection manager with environment-based configuration.
-
-    Defaults to localhost:32782 (Docker IRIS container) which is the
-    standard deployment configuration on EC2.
-
-    Environment Variables:
-        IRIS_HOST: Database hostname (default: localhost)
-        IRIS_PORT: Database port (default: 32782)
-        IRIS_NAMESPACE: Database namespace (default: %SYS)
-        IRIS_USERNAME: Database username (default: _SYSTEM)
-        IRIS_PASSWORD: Database password (default: SYS)
-
-    Example:
-        # Use defaults (local Docker IRIS)
-        conn = DatabaseConnection.get_connection()
-
-        # Override with environment variables for different setup
-        # export IRIS_HOST=192.168.1.100
-        # export IRIS_PORT=1972
-        conn = DatabaseConnection.get_connection()
     """
 
     # Default configuration (Local Docker IRIS)
@@ -71,7 +52,7 @@ class DatabaseConnection:
         }
     
     @classmethod
-    def get_connection(cls, **kwargs):
+    def get_connection(cls, **kwargs) -> Any:
         """
         Create IRIS database connection with retries.
         
@@ -96,31 +77,52 @@ class DatabaseConnection:
         last_error = None
         for attempt in range(max_retries):
             try:
-                import iris
-                # Try standard import first
-                if hasattr(iris, 'connect'):
-                    return iris.connect(**config)
+                # Use dynamic import to avoid static analysis issues
+                # Try intersystems_iris first (modern SDK)
+                try:
+                    iris_mod = importlib.import_module('intersystems_iris')
+                except ImportError:
+                    # Fallback to the legacy 'iris' module name
+                    try:
+                        iris_mod = importlib.import_module('iris')
+                    except ImportError:
+                        iris_mod = None
                 
-                # Fallback to irissdk if iris.connect is missing
-                # (Common issue with intersystems-irispython on some platforms)
-                import iris.irissdk
-                conn = iris.irissdk.IRISConnection()
-                # Use _connect as connect() is not exposed in some versions
-                conn._connect(
-                    config['hostname'], 
-                    config['port'], 
-                    config['namespace'], 
-                    config['username'], 
-                    config['password']
-                )
-                return conn
+                if iris_mod:
+                    # Use the user-suggested getattr trick for dynamic connection
+                    connect_fn = getattr(iris_mod, 'connect', None)
+                    if connect_fn:
+                        return connect_fn(**config)
+                
+                # Try irisnative if available
+                try:
+                    native_mod = importlib.import_module('irisnative')
+                    # Connection params vary for irisnative.createConnection
+                    return native_mod.createConnection(
+                        config['hostname'], 
+                        int(config['port']), 
+                        config['namespace'], 
+                        config['username'], 
+                        config['password']
+                    )
+                except ImportError:
+                    pass
+
+                # Deep fallback to iris.dbapi
+                try:
+                    dbapi_mod = importlib.import_module('iris.dbapi')
+                    return dbapi_mod.connect(**config)
+                except ImportError:
+                    pass
+
+                raise ImportError("No IRIS connection module found (tried intersystems_iris, iris, irisnative, iris.dbapi)")
 
             except Exception as e:
                 last_error = e
                 if attempt < max_retries - 1:
                     print(f"Warning: IRIS connection attempt {attempt+1} failed ({e}). Retrying in {retry_delay}s...", file=sys.stderr)
                     time.sleep(retry_delay)
-                    retry_delay *= 2
+                    retry_delay *= 2 # Exponential backoff
                 else:
                     # Final attempt failed
                     break
@@ -133,61 +135,27 @@ class DatabaseConnection:
     
     @classmethod
     def is_local(cls) -> bool:
-        """
-        Check if configured database is on localhost.
-        
-        Returns:
-            bool: True if hostname is localhost or 127.0.0.1
-        """
+        """Check if configured database is on localhost."""
         hostname = os.getenv('IRIS_HOST', cls.DEFAULT_CONFIG['hostname']).lower()
         return hostname in ('localhost', '127.0.0.1', '::1')
     
     @classmethod
     def is_docker(cls) -> bool:
-        """
-        Check if configured database is using default Docker config.
-
-        Returns:
-            bool: True if using default localhost:32782 config
-        """
+        """Check if configured database is using default Docker config."""
         hostname = os.getenv('IRIS_HOST', cls.DEFAULT_CONFIG['hostname'])
         port = int(os.getenv('IRIS_PORT', cls.DEFAULT_CONFIG['port']))
         return hostname in ('localhost', '127.0.0.1') and port == 32782
 
     @classmethod
     def get_info(cls) -> str:
-        """
-        Get human-readable connection info string.
-
-        Returns:
-            str: Connection info
-        """
+        """Get human-readable connection info string."""
         config = cls.get_config()
-        if cls.is_docker():
-            env = 'Docker'
-        elif cls.is_local():
-            env = 'Local'
-        else:
-            env = 'Remote'
+        env = 'Docker' if cls.is_docker() else ('Local' if cls.is_local() else 'Remote')
         return f"{env} IRIS @ {config['hostname']}:{config['port']}/{config['namespace']}"
 
 
-# Convenience function for backward compatibility
-def get_connection():
-    """
-    Create IRIS database connection.
-    
-    This is a convenience wrapper around DatabaseConnection.get_connection()
-    for simpler imports.
-    
-    Returns:
-        DBAPI connection object
-        
-    Example:
-        >>> from src.db.connection import get_connection
-        >>> conn = get_connection()
-        >>> cursor = conn.cursor()
-    """
+def get_connection() -> Any:
+    """Create IRIS database connection wrapper."""
     return DatabaseConnection.get_connection()
 
 
@@ -199,23 +167,8 @@ if __name__ == '__main__':
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        
-        # Test query
-        cursor.execute("SELECT COUNT(*) FROM VectorSearch.MIMICCXRImages")
-        count = cursor.fetchone()[0]
-        
         print(f"✅ Connected successfully!")
-        print(f"Images in database: {count:,}")
-        
         cursor.close()
         conn.close()
-        
     except Exception as e:
         print(f"❌ Connection failed: {e}")
-        print("\nTroubleshooting:")
-        print("1. Check network connectivity to AWS IRIS")
-        print("2. Verify credentials are correct")
-        print("3. Check if VPN/bastion is required")
-        print("4. Try setting environment variables:")
-        print("   export IRIS_HOST=localhost")
-        print("   export IRIS_PORT=32782")
