@@ -2,11 +2,8 @@
 # EC2 Service Operations Script for Medical GraphRAG Assistant
 # Verified reliable start/stop commands for AWS production deployment
 #
-# EC2 Instance: 13.218.19.254 (g5.xlarge, NVIDIA A10G)
-# SSH Key: ~/.ssh/fhir-ai-key-recovery.pem
-
 SSH_KEY="$HOME/.ssh/fhir-ai-key-recovery.pem"
-EC2_HOST="ubuntu@13.218.19.254"
+EC2_HOST="ubuntu@13.222.216.34"
 SSH_CMD="ssh -o StrictHostKeyChecking=no -i $SSH_KEY $EC2_HOST"
 
 # Colors for output
@@ -55,7 +52,7 @@ function stop_streamlit() {
     fi
 
     # External health check
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://13.218.19.254:8501/)
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://13.222.216.34:8501/)
     if [ "$HTTP_CODE" = "000" ]; then
         print_status "External access confirmed down (HTTP $HTTP_CODE)"
     else
@@ -171,7 +168,7 @@ case "$1" in
         ;;
     health)
         echo "=== Health Check ==="
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 http://13.218.19.254:8501/)
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 http://13.222.216.34:8501/)
         if [ "$HTTP_CODE" = "200" ]; then
             print_status "Streamlit: HTTP $HTTP_CODE (healthy)"
         else
