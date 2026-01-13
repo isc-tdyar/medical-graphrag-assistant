@@ -40,7 +40,7 @@ def check_health_command(args):
     if args.smoke_test:
         try:
             service = HybridSearchService()
-            search_results = service.search("fever", top_k=1)
+            search_results = service.search("hypertension", top_k=1)
             smoke_test_result = {
                 "status": "pass",
                 "results_count": search_results.get("results_count", 0),

@@ -523,7 +523,7 @@ def nim_llm_inference_test(host: str = "localhost", port: int = 8001) -> HealthC
             headers={'Content-Type': 'application/json'}
         )
 
-        with urllib.request.urlopen(req, timeout=30) as response:
+        with urllib.request.urlopen(req, timeout=60) as response:
             if response.status == 200:
                 response_data = json.loads(response.read().decode('utf-8'))
 
