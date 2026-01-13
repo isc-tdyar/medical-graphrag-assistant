@@ -91,8 +91,15 @@ def main():
     p_count = 0
     for p in patients:
         res, code = put_resource({"resourceType": "Patient", "id": p["id"], "name": [{"family": p["lname"], "given": [p["fname"]]}], "gender": p["gender"], "birthDate": p["bdate"]})
-        if res: p_count += 1
-        put_resource({"resourceType": "ImagingStudy", "id": p["img"]["id"], "status": "available", "subject": {"reference": f"Patient/{p['id']}"}, "started": p["img"]["date"], "modality": [{"code": "CR"}], "description": p["img"]["finding"]})
+        if res:
+            p_count += 1
+        else:
+            print(f"  ❌ Failed to upload Patient/{p['id']}: {code}")
+        
+        res_img, code_img = put_resource({"resourceType": "ImagingStudy", "id": p["img"]["id"], "status": "available", "subject": {"reference": f"Patient/{p['id']}"}, "started": p["img"]["date"], "modality": [{"code": "CR"}], "description": p["img"]["finding"]})
+        if not res_img:
+            print(f"  ❌ Failed to upload ImagingStudy/{p['img']['id']}: {code_img}")
+            
     print(f"✅ {p_count} Patients uploaded")
 
     print("Populating IRIS Tables...")
