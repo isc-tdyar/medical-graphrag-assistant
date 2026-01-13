@@ -71,16 +71,24 @@ def generate_patients():
     return patients
 
 def put_resource(resource):
+    import requests
+    from requests.auth import HTTPBasicAuth
     url = f"{FHIR_BASE_URL}/{resource['resourceType']}/{resource['id']}"
-    data = json.dumps(resource).encode("utf-8")
-    auth = "Basic " + base64.b64encode(f"{FHIR_USERNAME}:{FHIR_PASSWORD}".encode()).decode()
-    req = urllib.request.Request(url, data=data, method="PUT")
-    req.add_header("Content-Type", "application/json")
-    req.add_header("Accept", "application/json")
-    req.add_header("Authorization", auth)
+    headers = {
+        "Content-Type": "application/fhir+json",
+        "Accept": "application/fhir+json"
+    }
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return True, resp.getcode()
+        response = requests.put(
+            url, 
+            json=resource, 
+            headers=headers, 
+            auth=HTTPBasicAuth(FHIR_USERNAME, FHIR_PASSWORD),
+            timeout=10
+        )
+        if response.status_code in (200, 201):
+            return True, response.status_code
+        return False, f"Status {response.status_code}: {response.text}"
     except Exception as e:
         return False, str(e)
 
