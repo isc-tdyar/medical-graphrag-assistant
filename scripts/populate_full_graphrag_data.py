@@ -75,7 +75,8 @@ def put_resource(resource):
     data = json.dumps(resource).encode("utf-8")
     auth = "Basic " + base64.b64encode(f"{FHIR_USERNAME}:{FHIR_PASSWORD}".encode()).decode()
     req = urllib.request.Request(url, data=data, method="PUT")
-    req.add_header("Content-Type", "application/fhir+json")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("Accept", "application/json")
     req.add_header("Authorization", auth)
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
