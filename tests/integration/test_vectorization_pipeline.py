@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from vectorization.embedding_client import NVIDIAEmbeddingsClient
 from vectorization.vector_db_client import IRISVectorDBClient
-from vectorization.text_vectorizer import Clinical NoteVectorizer
+from vectorization.text_vectorizer import ClinicalNoteVectorizer
 
 
 # Test configuration

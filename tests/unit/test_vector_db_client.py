@@ -21,7 +21,7 @@ from typing import List
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from vectorization.vector_db_client import IRISVectorDBClient
+from src.vectorization.vector_db_client import IRISVectorDBClient
 
 
 class TestIRISVectorDBClient:
@@ -29,15 +29,14 @@ class TestIRISVectorDBClient:
 
     @pytest.fixture
     def mock_iris_module(self):
-        """Mock the iris module to avoid requiring IRIS installation."""
-        with patch('vectorization.vector_db_client.iris') as mock_iris:
-            # Mock connection
+        """Mock the DatabaseConnection to avoid requiring IRIS installation."""
+        with patch('src.db.connection.DatabaseConnection') as mock_db_class:
             mock_conn = MagicMock()
             mock_cursor = MagicMock()
             mock_conn.cursor.return_value = mock_cursor
-            mock_iris.connect.return_value = mock_conn
+            mock_db_class.get_connection.return_value = mock_conn
 
-            yield mock_iris, mock_conn, mock_cursor
+            yield mock_db_class, mock_conn, mock_cursor
 
     @pytest.fixture
     def client(self):
@@ -64,30 +63,32 @@ class TestIRISVectorDBClient:
 
     def test_connect_success(self, client, mock_iris_module):
         """Test successful database connection."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
 
         client.connect()
 
-        # Verify connection was established
-        mock_iris.connect.assert_called_once_with(
-            "localhost:1972/DEMO",
-            "_SYSTEM",
-            "ISCDEMO"
+        # Verify connection was established via DatabaseConnection
+        mock_db_class.get_connection.assert_called_once_with(
+            hostname="localhost",
+            port=1972,
+            namespace="DEMO",
+            username="_SYSTEM",
+            password="ISCDEMO"
         )
         assert client.connection == mock_conn
         assert client.cursor == mock_cursor
 
     def test_connect_failure(self, client, mock_iris_module):
         """Test connection failure handling."""
-        mock_iris, _, _ = mock_iris_module
-        mock_iris.connect.side_effect = Exception("Connection failed")
+        mock_db_class, _, _ = mock_iris_module
+        mock_db_class.get_connection.side_effect = Exception("Connection failed")
 
         with pytest.raises(Exception, match="Connection failed"):
             client.connect()
 
     def test_disconnect(self, client, mock_iris_module):
         """Test disconnect closes cursor and connection."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
 
         client.connect()
         client.disconnect()
@@ -97,7 +98,7 @@ class TestIRISVectorDBClient:
 
     def test_context_manager(self, client, mock_iris_module):
         """Test using client as context manager."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
 
         with client as ctx_client:
             assert ctx_client == client
@@ -109,7 +110,7 @@ class TestIRISVectorDBClient:
 
     def test_create_table_success(self, client, mock_iris_module):
         """Test creating ClinicalNoteVectors table."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
         client.connect()
 
         client.create_clinical_note_vectors_table(
@@ -129,7 +130,7 @@ class TestIRISVectorDBClient:
 
     def test_create_table_drop_if_exists(self, client, mock_iris_module):
         """Test dropping existing table before creation."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
         client.connect()
 
         client.create_clinical_note_vectors_table(
@@ -144,7 +145,7 @@ class TestIRISVectorDBClient:
 
     def test_insert_vector_success(self, client, mock_iris_module):
         """Test successful vector insertion."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
         client.connect()
 
         # Create a sample 1024-dim vector
@@ -178,7 +179,7 @@ class TestIRISVectorDBClient:
 
     def test_insert_vector_dimension_mismatch(self, client, mock_iris_module):
         """Test vector insertion with wrong dimension."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
         client.connect()
 
         # Create a vector with wrong dimension
@@ -196,7 +197,7 @@ class TestIRISVectorDBClient:
 
     def test_insert_vectors_batch(self, client, mock_iris_module):
         """Test batch vector insertion."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
         client.connect()
 
         vectors = [
@@ -220,7 +221,7 @@ class TestIRISVectorDBClient:
 
     def test_search_similar_success(self, client, mock_iris_module):
         """Test successful similarity search."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
         client.connect()
 
         # Mock query results
@@ -247,7 +248,7 @@ class TestIRISVectorDBClient:
 
     def test_search_similar_with_filters(self, client, mock_iris_module):
         """Test similarity search with patient and document type filters."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
         client.connect()
 
         mock_cursor.fetchall.return_value = [
@@ -275,7 +276,7 @@ class TestIRISVectorDBClient:
 
     def test_search_similar_dimension_mismatch(self, client, mock_iris_module):
         """Test search with wrong vector dimension."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
         client.connect()
 
         wrong_query_vector = [0.1] * 512  # Should be 1024
@@ -285,7 +286,7 @@ class TestIRISVectorDBClient:
 
     def test_count_vectors(self, client, mock_iris_module):
         """Test counting vectors in table."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
         client.connect()
 
         mock_cursor.fetchone.return_value = (1500,)
@@ -299,7 +300,7 @@ class TestIRISVectorDBClient:
 
     def test_get_vector_stats(self, client, mock_iris_module):
         """Test retrieving vector statistics."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
         client.connect()
 
         # Mock count query
@@ -332,17 +333,17 @@ class TestIRISVectorDBClientIntegration:
 
     @pytest.fixture
     def mock_iris_module(self):
-        """Mock the iris module."""
-        with patch('vectorization.vector_db_client.iris') as mock_iris:
+        """Mock the DatabaseConnection."""
+        with patch('src.db.connection.DatabaseConnection') as mock_db_class:
             mock_conn = MagicMock()
             mock_cursor = MagicMock()
             mock_conn.cursor.return_value = mock_cursor
-            mock_iris.connect.return_value = mock_conn
-            yield mock_iris, mock_conn, mock_cursor
+            mock_db_class.get_connection.return_value = mock_conn
+            yield mock_db_class, mock_conn, mock_cursor
 
     def test_full_workflow(self, mock_iris_module):
         """Test complete workflow: connect, create table, insert, search, stats, disconnect."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
 
         # Initialize client
         client = IRISVectorDBClient()
@@ -381,7 +382,7 @@ class TestIRISVectorDBClientIntegration:
 
     def test_batch_insert_with_partial_failure(self, mock_iris_module):
         """Test batch insertion where some vectors fail."""
-        mock_iris, mock_conn, mock_cursor = mock_iris_module
+        mock_db_class, mock_conn, mock_cursor = mock_iris_module
 
         client = IRISVectorDBClient()
         client.connect()

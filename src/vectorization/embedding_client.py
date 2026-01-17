@@ -64,7 +64,7 @@ class NVIDIAEmbeddingsClient:
         self,
         api_key: Optional[str] = None,
         model: str = "nvidia/nv-embedqa-e5-v5",
-        api_endpoint: str = "https://ai.api.nvidia.com/v1/retrieval/nvidia/nv-embedqa-e5-v5/embeddings",
+        api_endpoint: str = "https://integrate.api.nvidia.com/v1/embeddings",
         batch_size: int = 50,
         requests_per_minute: int = 60,
         max_retries: int = 3

@@ -58,12 +58,17 @@ medical-graphrag-assistant/
 - **AWS Profile**: `PowerUserPlusAccess-122293094970` (Latest verified).
 
 ### 🧪 Testing
-- **Run all tests**: `pytest`
-- **Search Services**: `pytest tests/unit/search/` (Verifies logic without MCP/UI)
-- **MCP Wrappers**: `pytest tests/unit/mcp/` (Verifies tool-to-service delegation)
-- **UX (Playwright)**: `pytest tests/ux/playwright/` (Requires TARGET_URL)
-- **Run a single test file**: `pytest tests/unit/search/test_hybrid_search.py`
-- **Run a specific test function**: `pytest tests/unit/search/test_hybrid_search.py::test_rrf_fusion`
+- **Run all tests (against EC2)**: `pytest tests/ --ignore=tests/ux -v`
+- **Current status**: 204 passed, 16 failed, 44 skipped (see FIXME.md)
+- **Environment auto-configured** via `tests/conftest.py` (defaults to EC2 44.200.206.67)
+- **Search Services**: `pytest tests/unit/search/`
+- **MCP Wrappers**: `pytest tests/unit/mcp/`
+- **Integration**: `pytest tests/integration/`
+- **E2E**: `pytest tests/e2e/`
+- **UX (Playwright)**: `pytest tests/ux/playwright/` (Requires `TARGET_URL` env var)
+- **Single file**: `pytest tests/unit/search/test_hybrid_search.py -v`
+- **Single test**: `pytest tests/unit/search/test_hybrid_search.py::test_rrf_fusion -v`
+- **See FIXME.md** for detailed fix plan for remaining failures
 
 ---
 
